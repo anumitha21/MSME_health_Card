@@ -1,5 +1,5 @@
 """
-Evaluate the trained MSME Health Card models.
+Evaluate the trained MSME Health Card models (v3 — XGBoost).
 
 Outputs
 -------
@@ -10,7 +10,6 @@ models_v3/evaluation_summary.json
 import sys
 from pathlib import Path
 
-# Add project root to sys.path to allow importing from src
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import json
@@ -26,7 +25,8 @@ from src.config import (
     FUSION_WEIGHTS,
     RISK_TIERS,
     model_path,
-    imputer_path,
+    add_interaction_features,
+    add_global_encoded_features,
 )
 
 
@@ -35,31 +35,25 @@ from src.config import (
 # ---------------------------------------------------------
 
 df = pd.read_csv(DATASET_PATH)
+df = add_global_encoded_features(df)
+df = add_interaction_features(df)
 
 models = {
     pillar: joblib.load(model_path(pillar))
     for pillar in FEATURE_GROUPS
 }
 
-imputers = {
-    pillar: joblib.load(imputer_path(pillar))
-    for pillar in FEATURE_GROUPS
-}
-
 
 # ---------------------------------------------------------
-# Helper
+# Helpers
 # ---------------------------------------------------------
 
 def assign_risk(score):
-
     if score is None:
         return "Unscoreable"
-
     for threshold, label in RISK_TIERS:
         if score >= threshold:
             return label
-
     return RISK_TIERS[-1][1]
 
 
@@ -69,7 +63,7 @@ def assign_risk(score):
 
 def score_business(row):
 
-    sub_scores = {}
+    sub_scores        = {}
     available_weights = {}
 
     for pillar, cfg in FEATURE_GROUPS.items():
@@ -78,61 +72,39 @@ def score_business(row):
             sub_scores[pillar] = None
             continue
 
-        X = row[cfg["features"]].to_frame().T
-
+        X = pd.DataFrame([row[cfg["features"]].values],
+                         columns=cfg["features"])
         X = X.apply(pd.to_numeric, errors="coerce")
 
-        X = imputers[pillar].transform(X)
+        default_prob = models[pillar].predict_proba(X)[0][1]
+        health_score = (1 - default_prob) * 100
 
-        default_probability = models[pillar].predict_proba(X)[0][1]
+        sub_scores[pillar]         = round(float(health_score), 1)
+        available_weights[pillar]  = FUSION_WEIGHTS[pillar]
 
-        health_score = (1 - default_probability) * 100
-
-        sub_scores[pillar] = round(float(health_score), 1)
-
-        available_weights[pillar] = FUSION_WEIGHTS[pillar]
-
-    # ---------------------------------------
-
-    if len(available_weights) == 0:
-
+    # ── Fusion ──────────────────────────────────────────────
+    if not available_weights:
         overall_score = None
-
-        confidence = "0/4"
-
+        confidence    = "0/4"
     else:
-
-        total_weight = sum(available_weights.values())
-
-        overall_score = 0
-
-        for pillar in available_weights:
-
-            overall_score += (
-                sub_scores[pillar]
-                * available_weights[pillar]
-                / total_weight
-            )
-
+        total_weight  = sum(available_weights.values())
+        overall_score = sum(
+            sub_scores[p] * available_weights[p] / total_weight
+            for p in available_weights
+        )
         overall_score = round(overall_score, 1)
-
-        confidence = f"{len(available_weights)}/4"
+        confidence    = f"{len(available_weights)}/4"
 
     return {
         "enterprise_id": row["enterprise_id"],
-
-        "gst_score": sub_scores["gst"],
-        "upi_score": sub_scores["upi"],
-        "aa_score": sub_scores["aa"],
-        "epfo_score": sub_scores["epfo"],
-
+        "gst_score":     sub_scores["gst"],
+        "upi_score":     sub_scores["upi"],
+        "aa_score":      sub_scores["aa"],
+        "epfo_score":    sub_scores["epfo"],
         "overall_score": overall_score,
-
-        "risk_tier": assign_risk(overall_score),
-
-        "confidence": confidence,
-
-        "actual_default": row[TARGET_COLUMN],
+        "risk_tier":     assign_risk(overall_score),
+        "confidence":    confidence,
+        "actual_default":row[TARGET_COLUMN],
     }
 
 
@@ -142,10 +114,8 @@ def score_business(row):
 
 print("\nScoring Portfolio...\n")
 
-results = []
-
+results    = []
 for _, row in df.iterrows():
-
     results.append(score_business(row))
 
 results_df = pd.DataFrame(results)
@@ -154,8 +124,20 @@ results_df.to_csv(
     DATASET_PATH.parent / "scored_portfolio_v3.csv",
     index=False,
 )
+print(f"Scored {len(results_df):,} businesses.")
 
-print(f"Scored {len(results_df)} businesses.")
+
+# ---------------------------------------------------------
+# Baseline (LogisticRegression) for comparison
+# ---------------------------------------------------------
+
+BASELINE = {
+    "fused":  0.7609,
+    "gst":    0.7659,
+    "upi":    0.7348,
+    "aa":     0.7686,
+    "epfo":   0.7812,
+}
 
 
 # ---------------------------------------------------------
@@ -166,48 +148,55 @@ summary = {}
 
 scoreable = results_df.dropna(subset=["overall_score"])
 
-summary["fused_auc"] = round(
-    roc_auc_score(
-        scoreable["actual_default"],
-        100 - scoreable["overall_score"],
-    ),
-    4,
+fused_auc = roc_auc_score(
+    scoreable["actual_default"],
+    100 - scoreable["overall_score"],
 )
-
-summary["coverage"] = round(
-    len(scoreable) / len(results_df),
-    4,
-)
-
+summary["fused_auc"]  = round(fused_auc, 4)
+summary["coverage"]   = round(len(scoreable) / len(results_df), 4)
 summary["pillar_metrics"] = {}
 
 for pillar in FEATURE_GROUPS:
-
-    subset = results_df.dropna(
-        subset=[f"{pillar}_score"]
-    )
-
-    auc = roc_auc_score(
+    subset = results_df.dropna(subset=[f"{pillar}_score"])
+    auc    = roc_auc_score(
         subset["actual_default"],
         100 - subset[f"{pillar}_score"],
     )
-
     summary["pillar_metrics"][pillar] = {
-        "auc": round(float(auc), 4),
-        "coverage": round(
-            len(subset) / len(results_df),
-            4,
-        ),
+        "auc":      round(float(auc), 4),
+        "coverage": round(len(subset) / len(results_df), 4),
     }
 
-
-with open(
-    MODEL_DIR / "evaluation_summary.json",
-    "w",
-) as f:
-
+with open(MODEL_DIR / "evaluation_summary.json", "w") as f:
     json.dump(summary, f, indent=4)
 
-print("\nEvaluation Complete\n")
 
+# ---------------------------------------------------------
+# Print before/after table
+# ---------------------------------------------------------
+
+print("\n" + "=" * 60)
+print("EVALUATION RESULTS — BEFORE vs AFTER (XGBoost Upgrade)")
+print("=" * 60)
+
+header = f"{'Pillar':<10}  {'Baseline AUC':>12}  {'New AUC':>10}  {'Delta':>8}  {'Coverage':>10}"
+print(header)
+print("-" * 60)
+
+for pillar in FEATURE_GROUPS:
+    b   = BASELINE[pillar]
+    n   = summary["pillar_metrics"][pillar]["auc"]
+    cov = summary["pillar_metrics"][pillar]["coverage"]
+    d   = n - b
+    sign = "+" if d >= 0 else ""
+    print(f"{pillar.upper():<10}  {b:>12.4f}  {n:>10.4f}  {sign}{d:>7.4f}  {cov:>9.2%}")
+
+print("-" * 60)
+fb = BASELINE["fused"]
+fn = summary["fused_auc"]
+fd = fn - fb
+sign = "+" if fd >= 0 else ""
+print(f"{'FUSED':<10}  {fb:>12.4f}  {fn:>10.4f}  {sign}{fd:>7.4f}  {summary['coverage']:>9.2%}")
+print("=" * 60)
+print()
 print(json.dumps(summary, indent=4))

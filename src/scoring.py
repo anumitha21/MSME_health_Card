@@ -1,144 +1,391 @@
 """
-Core inference logic for the MSME Health Card.
+Core inference logic for the MSME Health Card (v3.2 — XGBoost + SHAP + Rules + ULI Coaching).
 
 Used by:
-    - FastAPI
-    - Batch Evaluation
+    - FastAPI (api/main.py)
+    - Batch Evaluation (training/evaluate_models_v3.py)
 
 Single source of truth for business scoring.
 """
 
 from functools import lru_cache
+from typing import Optional
 
 import joblib
+import numpy as np
 import pandas as pd
+import shap
 
 from src.config import (
     FEATURE_GROUPS,
     FUSION_WEIGHTS,
     RISK_TIERS,
     model_path,
-    imputer_path,
+    assign_confidence_tier,
+    add_interaction_features,
+    add_global_encoded_features,
+    SEGMENT_MAP,
+    SECTOR_MAP,
 )
+from src.rules import evaluate_rules, make_decision
 
 
-# -----------------------------------------------------
-# Load Once
-# -----------------------------------------------------
+# -----------------------------------------------------------
+# Load models + SHAP explainers once (per process)
+# -----------------------------------------------------------
 
 @lru_cache(maxsize=1)
 def load_artifacts():
-
-    models = {}
-    imputers = {}
+    models    = {}
+    explainers = {}
 
     for pillar in FEATURE_GROUPS:
+        m = joblib.load(model_path(pillar))
+        models[pillar]     = m
+        explainers[pillar] = shap.TreeExplainer(m)
 
-        models[pillar] = joblib.load(model_path(pillar))
-        imputers[pillar] = joblib.load(imputer_path(pillar))
-
-    return models, imputers
+    return models, explainers
 
 
-# -----------------------------------------------------
+# -----------------------------------------------------------
 # Risk Tier
-# -----------------------------------------------------
+# -----------------------------------------------------------
 
-def assign_risk(score):
-
+def assign_risk(score: Optional[float]) -> str:
     if score is None:
         return "Unscoreable"
-
     for threshold, label in RISK_TIERS:
-
         if score >= threshold:
             return label
-
     return RISK_TIERS[-1][1]
 
 
-# -----------------------------------------------------
-# Score One Pillar
-# -----------------------------------------------------
+# -----------------------------------------------------------
+# Feature preparation (single record dict → DataFrame row)
+# -----------------------------------------------------------
 
-def score_pillar(record, pillar, model, imputer):
+def _prepare_record_df(record: dict) -> pd.DataFrame:
+    df = pd.DataFrame([record])
 
-    cfg = FEATURE_GROUPS[pillar]
+    # Encode segment / sector if present as strings
+    if "segment" in df.columns:
+        df["segment_encoded"] = df["segment"].map(SEGMENT_MAP).fillna(-1).astype(int)
+    else:
+        df["segment_encoded"] = -1
 
-    if record.get(cfg["availability_flag"], 0) != 1:
-        return None
+    if "sector" in df.columns:
+        df["sector_encoded"] = df["sector"].map(SECTOR_MAP).fillna(-1).astype(int)
+    else:
+        df["sector_encoded"] = -1
 
-    X = pd.DataFrame(
-        [[record.get(col) for col in cfg["features"]]],
-        columns=cfg["features"],
-    )
-
-    X = X.apply(pd.to_numeric, errors="coerce")
-
-    X = imputer.transform(X)
-
-    default_probability = model.predict_proba(X)[0][1]
-
-    health_score = (1 - default_probability) * 100
-
-    return round(float(health_score), 1)
+    df = add_interaction_features(df)
+    return df
 
 
-# -----------------------------------------------------
-# Overall Business Score
-# -----------------------------------------------------
+# -----------------------------------------------------------
+# Score + Explain one pillar
+# -----------------------------------------------------------
 
-def score_business(record):
+def score_and_explain_pillar(
+    record_df: pd.DataFrame,
+    pillar: str,
+    model,
+    explainer,
+    top_n: int = 5,
+) -> tuple[Optional[float], list[dict]]:
+    cfg              = FEATURE_GROUPS[pillar]
+    availability_flag = cfg["availability_flag"]
+    features         = cfg["features"]
 
-    models, imputers = load_artifacts()
+    raw = record_df.iloc[0].to_dict()
+    if raw.get(availability_flag, 0) != 1:
+        return None, []
 
-    pillar_scores = {}
-    weights = {}
+    X = record_df[features].apply(pd.to_numeric, errors="coerce")
+
+    default_prob = model.predict_proba(X)[0][1]
+    health_score = round(float((1 - default_prob) * 100), 1)
+
+    if explainer is None:
+        return health_score, []
+
+    # SHAP values
+    shap_vals = explainer.shap_values(X)
+    if isinstance(shap_vals, list):
+        sv = np.array(shap_vals[1])[0]
+    else:
+        sv = np.array(shap_vals)[0]
+
+    health_impact = -sv * 100   # flip sign: higher = healthier contribution
+
+    feature_impacts = sorted(
+        zip(features, health_impact),
+        key=lambda x: abs(x[1]),
+        reverse=True,
+    )[:top_n]
+
+    drivers = []
+    for feat, impact in feature_impacts:
+        if abs(impact) < 0.01:
+            continue
+        drivers.append({
+            "feature": feat,
+            "impact":  round(float(impact), 2),
+            "type":    "Positive Driver" if impact >= 0 else "Negative Driver",
+        })
+
+    return health_score, drivers
+
+
+# -----------------------------------------------------------
+# Aggregate cross-pillar drivers
+# -----------------------------------------------------------
+
+def _aggregate_drivers(
+    pillar_drivers: dict[str, list[dict]],
+    pillar_weights: dict[str, float],
+    top_n: int = 6,
+) -> list[dict]:
+    total_weight = sum(pillar_weights.values()) or 1.0
+    merged: dict[str, float] = {}
+
+    for pillar, drivers in pillar_drivers.items():
+        w = pillar_weights.get(pillar, 0) / total_weight
+        for d in drivers:
+            key    = d["feature"]
+            impact = d["impact"] * w
+            merged[key] = merged.get(key, 0.0) + impact
+
+    sorted_drivers = sorted(merged.items(), key=lambda x: abs(x[1]), reverse=True)
+
+    return [
+        {
+            "feature": feat,
+            "impact":  round(impact, 2),
+            "type":    "Positive Driver" if impact >= 0 else "Negative Driver",
+        }
+        for feat, impact in sorted_drivers[:top_n]
+    ]
+
+
+# -----------------------------------------------------------
+# Confidence Band Calculation
+# -----------------------------------------------------------
+
+def compute_confidence_band(tier: str) -> tuple[float, float]:
+    """
+    Returns (low_offset, high_offset) for the score based on data completeness.
+    Allows plotting confidence intervals (bands) around the score.
+    """
+    if tier == "Gold":
+        return -3.0, 3.0
+    elif tier == "Silver":
+        return -6.0, 6.0
+    elif tier == "Bronze":
+        return -10.0, 10.0
+    else:
+        return -15.0, 15.0
+
+
+# -----------------------------------------------------------
+# Borrower Coaching Logic
+# -----------------------------------------------------------
+
+def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> list[dict]:
+    """
+    Generates borrower-friendly, actionable suggestions to improve
+    their MSME credit score, sorted by potential score boost.
+    """
+    recommendations = []
+
+    # Map negative drivers
+    neg_drivers = {d["feature"]: d["impact"] for d in key_drivers if d["type"] == "Negative Driver"}
+
+    # 1. GST Compliance recommendation
+    if record.get("gst_registered") == 1:
+        late_filings = record.get("gst_late_filing_count_12m", 0)
+        if late_filings > 0:
+            impact = abs(neg_drivers.get("gst_late_filing_count_12m", -5.0))
+            lift = round(impact * 0.8, 1)
+            recommendations.append({
+                "pillar": "GST",
+                "title": "Ensure timely GST filing",
+                "recommendation": f"Avoid filing GST late. You had {int(late_filings)} late filing(s) in the last 12 months. File GSTR-3B on time for 3 consecutive months to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+        consistency = record.get("gst_filing_consistency_pct", 100)
+        if consistency < 90:
+            impact = abs(neg_drivers.get("gst_filing_consistency_pct", -4.0))
+            lift = round(impact * 0.9, 1)
+            recommendations.append({
+                "pillar": "GST",
+                "title": "Maintain consistent GST returns",
+                "recommendation": f"Your GST filing consistency is currently at {consistency}%. Target filing every single reporting period to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+
+    # 2. UPI Cash Flow recommendation
+    if record.get("upi_available") == 1:
+        bounce_rate = record.get("upi_bounce_rate_pct", 0)
+        if bounce_rate > 3.0:
+            impact = abs(neg_drivers.get("upi_bounce_rate_pct", -6.0))
+            lift = round(impact * 1.2, 1)
+            recommendations.append({
+                "pillar": "UPI",
+                "title": "Minimize payment bounces",
+                "recommendation": f"Your transaction bounce rate is {bounce_rate}%. Keep sufficient balance to prevent failed auto-debits and customer bounces to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+        volatility = record.get("upi_inflow_volatility", 0)
+        if volatility > 0.4:
+            impact = abs(neg_drivers.get("upi_inflow_volatility", -3.0))
+            lift = round(impact * 0.7, 1)
+            recommendations.append({
+                "pillar": "UPI",
+                "title": "Stabilize monthly inflows",
+                "recommendation": f"Encourage clients to split bulk payments into predictable weekly or monthly receipts to reduce cash flow volatility to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+
+    # 3. Account Aggregator Bank balance / leverage
+    if record.get("aa_consent_given") == 1:
+        od_util = record.get("aa_overdraft_utilization_pct", 0)
+        if od_util > 60:
+            impact = abs(neg_drivers.get("aa_overdraft_utilization_pct", -8.0))
+            lift = round(impact * 1.1, 1)
+            recommendations.append({
+                "pillar": "AA",
+                "title": "Reduce overdraft utilization",
+                "recommendation": f"Your OD utilization is high ({od_util}%). Try to keep it below 50% to show lenders you have comfortable liquidity room to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+        emi_ratio = record.get("aa_emi_to_inflow_ratio", 0)
+        if emi_ratio > 0.35:
+            impact = abs(neg_drivers.get("aa_emi_to_inflow_ratio", -7.0))
+            lift = round(impact * 1.0, 1)
+            recommendations.append({
+                "pillar": "AA",
+                "title": "Rationalize debt commitments",
+                "recommendation": f"Monthly EMIs represent {round(emi_ratio*100)}% of bank inflow. Avoid taking fresh debt until current loan principal is partly reduced to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+        cash_flow = record.get("aa_cash_flow_ratio", 1.5)
+        if cash_flow < 1.1:
+            impact = abs(neg_drivers.get("aa_cash_flow_ratio", -4.0))
+            lift = round(impact * 0.8, 1)
+            recommendations.append({
+                "pillar": "AA",
+                "title": "Improve cash surplus ratio",
+                "recommendation": f"Cash flow coverage ratio ({cash_flow}) is tight. Optimize collection terms with suppliers to increase liquid reserves to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+
+    # 4. EPFO Employment stability
+    if record.get("epfo_registered") == 1:
+        contrib = record.get("epfo_contribution_consistency_pct", 100)
+        if contrib < 95:
+            impact = abs(neg_drivers.get("epfo_contribution_consistency_pct", -5.0))
+            lift = round(impact * 1.0, 1)
+            recommendations.append({
+                "pillar": "EPFO",
+                "title": "Clear EPFO dues strictly",
+                "recommendation": f"EPFO deposit consistency is {contrib}%. Timely social security payments to staff are critical to prove operational stability to gain +{lift} points.",
+                "estimated_lift": lift,
+            })
+
+    # If no negative drivers are identified, provide positive reinforcement
+    if not recommendations:
+        recommendations.append({
+            "pillar": "ALL",
+            "title": "Excel in alternate credit",
+            "recommendation": "Great work! All metrics are showing healthy levels. Continue filing GST, routing receipts via UPI, and maintaining liquidity to secure lower loan rates.",
+            "estimated_lift": 0.0,
+        })
+
+    # Sort by descending potential lift
+    recommendations = sorted(recommendations, key=lambda x: x["estimated_lift"], reverse=True)
+    return recommendations[:3]
+
+
+# -----------------------------------------------------------
+# Full business score (public entry point)
+# -----------------------------------------------------------
+
+def score_business(record: dict, explain: bool = True) -> dict:
+    models, explainers = load_artifacts()
+
+    # ── Autoencoder Imputation & Self-Supervised Embedding ──
+    from src.imputation import impute_and_embed
+    # Compute the self-supervised embedding
+    _, embedding = impute_and_embed(record)
+
+    # Pass the raw record (with NaNs intact) to maximize XGBoost native split AUC
+    record_df = _prepare_record_df(record)
+
+    pillar_scores   = {}
+    pillar_drivers  = {}
+    pillar_weights  = {}
+    available_pillars = []
 
     for pillar in FEATURE_GROUPS:
-
-        score = score_pillar(
-            record,
+        score, drivers = score_and_explain_pillar(
+            record_df,
             pillar,
             models[pillar],
-            imputers[pillar],
+            explainers[pillar] if explain else None,
         )
 
         pillar_scores[pillar] = score
 
         if score is not None:
-            weights[pillar] = FUSION_WEIGHTS[pillar]
+            available_pillars.append(pillar)
+            pillar_weights[pillar] = FUSION_WEIGHTS[pillar]
+            pillar_drivers[pillar] = drivers
 
-    # -------------------------------------------------
-
-    if not weights:
-
-        overall = None
-        confidence = "0/4 sources available"
-
+    # ── Fusion ──────────────────────────────────────────────────
+    if not pillar_weights:
+        overall_score = None
+        confidence    = "0/4 sources available"
     else:
-
-        total = sum(weights.values())
-
-        overall = sum(
-            pillar_scores[p] * weights[p] / total
-            for p in weights
+        total = sum(pillar_weights.values())
+        overall_score = round(
+            sum(pillar_scores[p] * pillar_weights[p] / total for p in pillar_weights),
+            1,
         )
+        confidence = f"{len(pillar_weights)}/4 sources available"
 
-        overall = round(overall, 1)
+    # ── Confidence tier & bands ─────────────────────────────────
+    confidence_tier = assign_confidence_tier(available_pillars)
+    low_offset, high_offset = compute_confidence_band(confidence_tier)
 
-        confidence = f"{len(weights)}/4 sources available"
+    # ── Aggregated cross-pillar drivers ─────────────────────────
+    key_drivers = (
+        _aggregate_drivers(pillar_drivers, pillar_weights)
+        if explain
+        else []
+    )
+
+    # ── Rule engine ─────────────────────────────────────────────
+    triggered_rules = evaluate_rules(record)
+    decision        = make_decision(overall_score, triggered_rules)
+
+    # ── Borrower Coaching recommendations ────────────────────────
+    recommendations = generate_coaching_recommendations(record, key_drivers)
 
     return {
-
-        "gst_score": pillar_scores["gst"],
-        "upi_score": pillar_scores["upi"],
-        "aa_score": pillar_scores["aa"],
-        "epfo_score": pillar_scores["epfo"],
-
-        "overall_score": overall,
-
-        "risk_tier": assign_risk(overall),
-
+        "gst_score":       pillar_scores["gst"],
+        "upi_score":       pillar_scores["upi"],
+        "aa_score":        pillar_scores["aa"],
+        "epfo_score":      pillar_scores["epfo"],
+        "overall_score":   overall_score,
+        "score_range_low":  round(max(overall_score + low_offset, 0), 1) if overall_score is not None else None,
+        "score_range_high": round(min(overall_score + high_offset, 100), 1) if overall_score is not None else None,
+        "risk_tier":       assign_risk(overall_score),
         "data_confidence": confidence,
+        "confidence_tier": confidence_tier,
+        "key_drivers":     key_drivers,
+        "triggered_rules": triggered_rules,
+        "decision":        decision,
+        "recommendations": recommendations,
+        "self_supervised_embedding": embedding,
     }
