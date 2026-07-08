@@ -1,0 +1,19 @@
+{
+    "gst_filing_consistency_pct": 52.7,
+    "gst_turnover_growth_rate": 0.66,
+    "gst_avg_monthly_turnover_inr": 298200.0,
+    "gst_late_filing_count_12m": 3.0,
+    "upi_monthly_txn_count": 73.0,
+    "upi_avg_inflow_inr": 172000.0,
+    "upi_inflow_volatility": 0.326,
+    "upi_bounce_rate_pct": 8.87,
+    "aa_avg_bank_balance_inr": 92700.0,
+    "aa_trade_payable_days": 59.7,
+    "aa_cash_flow_ratio": 0.85,
+    "aa_emi_to_inflow_ratio": 0.369,
+    "aa_overdraft_utilization_pct": 41.6,
+    "epfo_employee_count": 21.0,
+    "epfo_contribution_consistency_pct": 49.9,
+    "epfo_avg_wage_inr": 15600.0,
+    "epfo_employee_growth_rate": 1.13
+}

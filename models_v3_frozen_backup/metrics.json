@@ -1,0 +1,46 @@
+{
+    "gst": {
+        "pillar": "gst",
+        "n_train_available": 4430,
+        "pct_of_book": 60.9,
+        "default_rate_in_subset": 0.1053,
+        "cv_auc": 0.767,
+        "train_auc": 0.8165,
+        "val_auc": 0.7601,
+        "test_auc": 0.7764,
+        "n_features": 11
+    },
+    "upi": {
+        "pillar": "upi",
+        "n_train_available": 5765,
+        "pct_of_book": 80.0,
+        "default_rate_in_subset": 0.127,
+        "cv_auc": 0.7442,
+        "train_auc": 0.82,
+        "val_auc": 0.7604,
+        "test_auc": 0.747,
+        "n_features": 10
+    },
+    "aa": {
+        "pillar": "aa",
+        "n_train_available": 3433,
+        "pct_of_book": 48.7,
+        "default_rate_in_subset": 0.1029,
+        "cv_auc": 0.751,
+        "train_auc": 0.8236,
+        "val_auc": 0.7775,
+        "test_auc": 0.768,
+        "n_features": 12
+    },
+    "epfo": {
+        "pillar": "epfo",
+        "n_train_available": 1784,
+        "pct_of_book": 25.3,
+        "default_rate_in_subset": 0.1092,
+        "cv_auc": 0.7651,
+        "train_auc": 0.8626,
+        "val_auc": 0.7299,
+        "test_auc": 0.7915,
+        "n_features": 10
+    }
+}

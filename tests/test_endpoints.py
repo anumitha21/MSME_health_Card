@@ -43,9 +43,18 @@ class TestMSMEHealthCardLogic(unittest.TestCase):
         if missing_records.empty:
             self.skipTest("No records with missing sources found.")
             
-        enterprise_id = missing_records.iloc[0]["enterprise_id"]
-        data = get_completeness_gap(enterprise_id)
+        # Find an enterprise with missing sources that has at least one positive-gain gap
+        found = False
+        for _, row in missing_records.iterrows():
+            enterprise_id = row["enterprise_id"]
+            data = get_completeness_gap(enterprise_id)
+            if len(data.get("gaps", [])) > 0:
+                found = True
+                break
         
+        if not found:
+            self.skipTest("No records with positive-gain completeness gaps found.")
+            
         self.assertEqual(data["enterprise_id"], enterprise_id)
         self.assertNotEqual(data["current_tier"], "Gold")
         self.assertTrue(len(data["gaps"]) > 0)

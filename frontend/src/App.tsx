@@ -124,6 +124,13 @@ const SEARCHABLE_MSMES = [
   { id: 'MSME100007', segment: 'Medium', sector: 'Food Processing' }
 ];
 
+const getConfidenceIntervalVal = (tier: string) => {
+  if (tier === 'Gold') return 3;
+  if (tier === 'Silver') return 6;
+  if (tier === 'Bronze') return 10;
+  return 15;
+};
+
 const getTranslatedMessage = (gap: any, lang: 'EN' | 'HI', score: any) => {
   if (lang === 'EN') return gap.message;
   
@@ -147,9 +154,13 @@ const getTranslatedMessage = (gap: any, lang: 'EN' | 'HI', score: any) => {
   const current_tier = tierNames[score.confidence_tier] || score.confidence_tier;
   const projected_tier = tierNames[gap.projected_tier] || gap.projected_tier;
   
-  const current_ci_val = score.confidence_tier === 'Gold' ? 3 : score.confidence_tier === 'Silver' ? 6 : score.confidence_tier === 'Bronze' ? 10 : 15;
+  const current_ci_val = getConfidenceIntervalVal(score.confidence_tier);
   
-  return `${source} को जोड़ने से आप ${current_tier} से ${projected_tier} श्रेणी में जा सकते हैं और आपका स्कोर लगभग +${gap.estimated_point_gain.toFixed(1)} अंक बढ़ सकता है, जिससे आपकी सटीकता रेंज ±${current_ci_val} से घटकर ±${gap.projected_confidence_interval} हो सकती है।`;
+  if (gap.estimated_point_gain >= 0) {
+    return `${source} को जोड़ने से आप ${current_tier} से ${projected_tier} श्रेणी में जा सकते हैं और आपका स्कोर लगभग +${gap.estimated_point_gain.toFixed(1)} अंक बढ़ सकता है, जिससे आपकी सटीकता रेंज ±${current_ci_val} से घटकर ±${gap.projected_confidence_interval} हो सकती है।`;
+  } else {
+    return `${source} को जोड़ने से आप ${current_tier} से ${projected_tier} श्रेणी में जा सकते हैं और आपका स्कोर लगभग ${Math.abs(gap.estimated_point_gain).toFixed(1)} अंक कम हो सकता है, जिससे आपकी सटीकता रेंज ±${current_ci_val} से घटकर ±${gap.projected_confidence_interval} हो सकती है।`;
+  }
 };
 
 const getTranslatedRecommendation = (rec: any, lang: 'EN' | 'HI') => {
@@ -766,7 +777,7 @@ export default function App() {
                       {score.confidence_tier} Tier
                     </span>
                     <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>
-                      {lang === 'EN' ? `Confidence Margin: ±${score.confidence_tier === 'Gold' ? '3' : '10'} Points` : 'सटीकता रेंज'}
+                      {lang === 'EN' ? `Confidence Margin: ±${getConfidenceIntervalVal(score.confidence_tier)} Points` : `सटीकता रेंज: ±${getConfidenceIntervalVal(score.confidence_tier)} अंक`}
                     </span>
                   </div>
                 </div>
@@ -792,7 +803,8 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {completenessGap.gaps.map((gap) => {
+                      {/* 1. Positive Lift Gaps (Action Recommendations) */}
+                      {completenessGap.gaps.filter(g => g.estimated_point_gain >= 0).map((gap) => {
                         const isExpanded = expandedGap === gap.missing_source;
                         return (
                           <div 
@@ -807,8 +819,8 @@ export default function App() {
                                   {gap.missing_source === 'AA' ? 'Account Aggregator' : gap.missing_source}
                                 </span>
                               </div>
-                              <div className="coach-lift">
-                                {gap.estimated_point_gain >= 0 ? '+' : ''}{gap.estimated_point_gain.toFixed(1)} pts
+                              <div className="coach-lift" style={{ color: 'var(--green)' }}>
+                                +{gap.estimated_point_gain.toFixed(1)} pts
                               </div>
                             </div>
                             
@@ -832,7 +844,7 @@ export default function App() {
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                   <span>{lang === 'EN' ? 'Confidence Margin' : 'सटीकता रेंज'}:</span>
-                                  <span>±{score.confidence_tier === 'Gold' ? 3 : score.confidence_tier === 'Silver' ? 6 : score.confidence_tier === 'Bronze' ? 10 : 15} → ±{gap.projected_confidence_interval} Points</span>
+                                  <span>±{getConfidenceIntervalVal(score.confidence_tier)} → ±{gap.projected_confidence_interval} Points</span>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                   <span>{lang === 'EN' ? 'Projected Score' : 'अनुमानित स्कोर'}:</span>
@@ -843,6 +855,78 @@ export default function App() {
                           </div>
                         );
                       })}
+
+                      {/* 2. Negative Lift Gaps (Neutral Data Transparency) */}
+                      {completenessGap.gaps.filter(g => g.estimated_point_gain < 0).length > 0 && (
+                        <>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 700, marginTop: '0.75rem', marginBottom: '0.25rem', borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+                            {lang === 'EN' ? 'Information Coverage & Exposure' : 'सूचना कवरेज और डेटा दृश्यता'}
+                          </div>
+                          {completenessGap.gaps.filter(g => g.estimated_point_gain < 0).map((gap) => {
+                            const isExpanded = expandedGap === gap.missing_source;
+                            return (
+                              <div 
+                                key={gap.missing_source} 
+                                style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', cursor: 'pointer', background: 'var(--bg)', opacity: 0.85 }}
+                                onClick={() => setExpandedGap(isExpanded ? null : gap.missing_source)}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{
+                                      width: '12px',
+                                      height: '12px',
+                                      border: '1.5px solid var(--text-secondary)',
+                                      borderRadius: '50%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '8px',
+                                      color: 'var(--text-secondary)',
+                                      fontWeight: 'bold',
+                                      flexShrink: 0
+                                    }}>i</span>
+                                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                                      {gap.missing_source === 'AA' ? 'Account Aggregator' : gap.missing_source}
+                                    </span>
+                                  </div>
+                                  <div className="coach-lift" style={{ color: 'var(--text-secondary)' }}>
+                                    {gap.estimated_point_gain.toFixed(1)} pts
+                                  </div>
+                                </div>
+                                
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '4px', paddingLeft: '18px' }}>
+                                  {getTranslatedMessage(gap, lang, score)}
+                                </div>
+
+                                {isExpanded && (
+                                  <div style={{ marginTop: '8px', padding: '8px', background: 'var(--surface-hi)', borderRadius: '6px', fontSize: '0.62rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '18px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span>{lang === 'EN' ? 'Confidence Migration' : 'सटीकता श्रेणी बदलाव'}:</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        <span className={`confidence-chip ${tierBadgeClass(score.confidence_tier)}`} style={{ padding: '1px 4px', fontSize: '0.55rem' }}>
+                                          {score.confidence_tier}
+                                        </span>
+                                        <span>→</span>
+                                        <span className={`confidence-chip ${tierBadgeClass(gap.projected_tier)}`} style={{ padding: '1px 4px', fontSize: '0.55rem' }}>
+                                          {gap.projected_tier}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>{lang === 'EN' ? 'Confidence Margin' : 'सटीकता रेंज'}:</span>
+                                      <span>±{getConfidenceIntervalVal(score.confidence_tier)} → ±{gap.projected_confidence_interval} Points</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                      <span>{lang === 'EN' ? 'Projected Score' : 'अनुमानित स्कोर'}:</span>
+                                      <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{score.overall_score?.toFixed(1)} → {gap.projected_score.toFixed(1)}</span>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
 
                       {['GST', 'UPI', 'AA', 'EPFO']
                         .filter(src => !completenessGap.gaps.some(g => g.missing_source === src))

@@ -485,9 +485,9 @@ body {
 }
 .stress-select {
   flex: 1;
-  background: var(--surface);
+  background-color: var(--surface-hi) !important;
   border: 1px solid var(--border);
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   padding: 0.6rem;
   border-radius: var(--radius-sm);
   outline: none;
@@ -495,8 +495,8 @@ body {
   font-size: 0.82rem;
 }
 .stress-select option {
-  background: var(--surface);
-  color: var(--text-primary);
+  background-color: #141A22 !important;
+  color: var(--text-primary) !important;
 }
 
 .slider-container {
@@ -513,9 +513,9 @@ body {
 }
 .stress-slider {
   -webkit-appearance: none;
-  height: 5px;
+  height: 6px;
   background: var(--border);
-  border-radius: 2px;
+  border-radius: 3px;
   outline: none;
   width: 100%;
 }
@@ -524,12 +524,12 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--primary);
+  background: var(--accent); /* teal thumb */
   cursor: pointer;
   transition: transform 0.1s;
 }
 .stress-slider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.25);
 }
 
 /* Stress comparison charts */
@@ -688,10 +688,10 @@ body {
 .mobile-device {
   width: 360px;
   height: 720px;
-  background: #FAFAF9;
-  border: 10px solid #2E3E52; /* sleek steel frame */
+  background: var(--bg);
+  border: 10px solid var(--border); /* sleek steel vault frame */
   border-radius: 40px;
-  box-shadow: 0 15px 45px rgba(27, 58, 92, 0.15);
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   position: relative;
   display: flex;
@@ -700,7 +700,7 @@ body {
 .mobile-notch {
   width: 140px;
   height: 18px;
-  background: #2E3E52;
+  background: var(--border);
   border-radius: 0 0 14px 14px;
   position: absolute;
   top: 0;
@@ -715,7 +715,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  background: #FAFAF9;
+  background: var(--bg);
 }
 .mobile-header {
   display: flex;

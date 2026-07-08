@@ -476,6 +476,9 @@ def get_completeness_gap(enterprise_id: str) -> dict:
         
         estimated_point_gain = round(projected_score - current_score, 1)
         
+        if estimated_point_gain <= 0:
+            continue
+            
         source_display_names = {
             "gst": "GST",
             "upi": "UPI",
@@ -484,10 +487,9 @@ def get_completeness_gap(enterprise_id: str) -> dict:
         }
         source_name = source_display_names[s]
         
-        sign = "+" if estimated_point_gain >= 0 else ""
         message = (
             f"Connecting {source_name} could move you from {current_tier} to {projected_tier} tier "
-            f"and may increase your score by an estimated {sign}{estimated_point_gain:.1f} points, "
+            f"and may increase your score by an estimated +{estimated_point_gain:.1f} points, "
             f"tightening your confidence range from ±{int(current_ci)} to ±{int(projected_ci)}."
         )
         
@@ -502,10 +504,15 @@ def get_completeness_gap(enterprise_id: str) -> dict:
         
     gaps.sort(key=lambda x: x["estimated_point_gain"], reverse=True)
     
-    return {
+    res = {
         "enterprise_id": enterprise_id,
         "current_tier": current_tier,
         "current_score": current_score,
         "current_confidence_interval": current_ci,
         "gaps": gaps
     }
+    
+    if not gaps:
+        res["message"] = "No further score improvements are projected from additional data source connections."
+        
+    return res

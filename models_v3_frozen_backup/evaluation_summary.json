@@ -1,0 +1,22 @@
+{
+    "fused_auc": 0.8016,
+    "coverage": 0.9737,
+    "pillar_metrics": {
+        "gst": {
+            "auc": 0.7974,
+            "coverage": 0.6086
+        },
+        "upi": {
+            "auc": 0.7939,
+            "coverage": 0.8005
+        },
+        "aa": {
+            "auc": 0.8019,
+            "coverage": 0.4868
+        },
+        "epfo": {
+            "auc": 0.821,
+            "coverage": 0.2526
+        }
+    }
+}

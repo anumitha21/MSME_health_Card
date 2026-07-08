@@ -1,0 +1,65 @@
+{
+  "gst": {
+    "availability_flag": "gst_registered",
+    "features": [
+      "gst_filing_consistency_pct",
+      "gst_turnover_growth_rate",
+      "gst_avg_monthly_turnover_inr",
+      "gst_late_filing_count_12m",
+      "years_in_operation",
+      "is_ntc",
+      "is_ntb",
+      "segment_encoded",
+      "sector_encoded",
+      "tax_to_income_ratio",
+      "financial_leverage"
+    ]
+  },
+  "upi": {
+    "availability_flag": "upi_available",
+    "features": [
+      "upi_monthly_txn_count",
+      "upi_avg_inflow_inr",
+      "upi_inflow_volatility",
+      "upi_bounce_rate_pct",
+      "years_in_operation",
+      "is_ntc",
+      "is_ntb",
+      "segment_encoded",
+      "sector_encoded",
+      "tax_to_income_ratio"
+    ]
+  },
+  "aa": {
+    "availability_flag": "aa_consent_given",
+    "features": [
+      "aa_avg_bank_balance_inr",
+      "aa_trade_payable_days",
+      "aa_cash_flow_ratio",
+      "aa_emi_to_inflow_ratio",
+      "aa_overdraft_utilization_pct",
+      "years_in_operation",
+      "is_ntc",
+      "is_ntb",
+      "segment_encoded",
+      "sector_encoded",
+      "financial_leverage",
+      "wage_leverage"
+    ]
+  },
+  "epfo": {
+    "availability_flag": "epfo_registered",
+    "features": [
+      "epfo_employee_count",
+      "epfo_contribution_consistency_pct",
+      "epfo_avg_wage_inr",
+      "epfo_employee_growth_rate",
+      "years_in_operation",
+      "is_ntc",
+      "is_ntb",
+      "segment_encoded",
+      "sector_encoded",
+      "wage_leverage"
+    ]
+  }
+}

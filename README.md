@@ -1,125 +1,107 @@
-# MSME Health Card
+# IDBI MSME Sahay — AI-Powered Credit Underwriting & Alternative Credit Gateway
 
-An AI-powered MSME Financial Health Card that estimates the financial health of small businesses using alternative data sources.
-
-## Features
-
-- GST Health Model
-- UPI Behaviour Model
-- Account Aggregator Model
-- EPFO Employment Model
-- Dynamic Score Fusion
-- FastAPI REST API
-- Automatic handling of missing data
+An alternative credit underwriting console and borrower coaching gateway built for the **IDBI Innovate 2026 Hackathon**. The platform evaluates capital risk migration, PSL eligibility, and credit profiles by fusing alternative transactional data streams (GST, UPI, Account Aggregator, EPFO).
 
 ---
 
-## Project Structure
+## 🚀 Key Features
+
+*   **Optimized XGBoost Risk Modeling**: Upgraded baseline classifiers to non-linear XGBoost estimators, achieving a peak **0.8014 Fused AUC** with native missing value splits.
+*   **Multi-Modal Autoencoder Embedding**: Uses a self-supervised autoencoder bottleneck layer `(17 -> 12 -> 6 -> 12 -> 17)` to extract 6D latent vector representations ($Z_0 \dots Z_5$) to monitor borrower drift.
+*   **Business Impact Hero Console**: Displays Alt-Data Onboarding volumes, derived Addressable Lending Exposure (scaled in Crores at a ₹15 Lakhs average multiplier), and PSL compliance counts.
+*   **Technical Accordion (Model Evidence)**: Wraps technical indices, rule knock-outs, and SHAP contributors under a collapsible accordion styled in evidence-teal, featuring a single-run animated gold ECG pulse overlay on load.
+*   **Dynamic ULI consent Registry**: Compiles dynamic JSON payload blocks dynamically using active database row lookups rather than hardcoded mock objects.
+*   **Conditional Completeness Coach**: Identifies missing data sources, runs autoencoder simulations to estimate point lift, and automatically filters out negative-gain results.
+
+---
+
+## ❄️ Model Freeze Warning (Submission Critical)
+
+> [!WARNING]
+> The trained model pickle files in `models_v3/` are **frozen and final** for submission. 
+> Do **NOT** run the training scripts `python training/train_models_v3.py` or `python training/train_autoencoder.py`. 
+> Since these scripts utilize randomized search iterations and Adam optimizers, re-running them will stochastically shift model weights, decision boundaries, and imputed EPFO scores. A backup of the frozen artifacts is securely stored at `models_v3_frozen_backup/`.
+
+---
+
+## 📂 Project Structure
 
 ```
-msme-health-card/
-
-api/
-src/
-training/
-data/
-models_v3/
+MSME/
+├── api/
+│   └── main.py             # FastAPI entry points
+├── src/
+│   ├── config.py           # Core constants & path variables
+│   ├── imputation.py       # Autoencoder forward pass & training logic
+│   ├── portfolio.py        # Portfolio simulations & PSL statistics
+│   ├── rules.py            # Rule engine criteria (Auto-Approve/Manual/Reject)
+│   ├── scoring.py          # Pillar scoring & completeness gap simulations
+│   └── uli.py              # ULI registry data block builders
+├── training/
+│   ├── train_models_v3.py  # XGBoost training runner (Do not run!)
+│   ├── train_autoencoder.py# Autoencoder training runner (Do not run!)
+│   └── evaluate_models_v3.py# Evaluates AUC metrics on scored_portfolio_v3.csv
+├── data/
+│   └── msme_alternate_data_synthetic.csv   # Synthetic borrower database
+├── models_v3/              # Frozen model pickle artifacts
+├── models_v3_frozen_backup/# Secure backup of the frozen models
+└── frontend/               # React + Vite dashboard web application
 ```
 
 ---
 
-## Training
+## 🛠️ Installation & Setup
 
+### 1. Backend Server Setup
+Ensure Python 3.11+ is active in your terminal. From the root directory:
 ```bash
-python training/train_models_v3.py
-```
+# Activate virtual environment
+.venv/Scripts/activate
 
----
+# Install dependencies
+pip install -r requirements.txt
 
-## Evaluation
-
-```bash
-python training/evaluate_models_v3.py
-```
-
----
-
-## Run API
-
-```bash
+# Start the FastAPI server (runs on port 8000)
 uvicorn api.main:app --reload
 ```
 
-Open
+### 2. Frontend Application Setup
+From the `frontend` directory:
+```bash
+# Install Node modules
+npm install
 
-```
-http://127.0.0.1:8000/docs
-```
+# Start the local development server (runs on port 5173)
+npm run dev
 
----
-
-## API Example
-
-POST
-
-```
-/score
-```
-
-Example JSON
-
-```json
-{
-    "enterprise_id":"MSME001",
-    "gst_registered":1,
-    "gst_filing_consistency_pct":91,
-    "gst_turnover_growth_rate":12,
-    "gst_avg_monthly_turnover_inr":420000,
-    "gst_late_filing_count_12m":1,
-
-    "upi_available":1,
-    "upi_monthly_txn_count":320,
-    "upi_avg_inflow_inr":1800,
-    "upi_inflow_volatility":0.21,
-    "upi_bounce_rate_pct":0.8,
-
-    "aa_consent_given":1,
-    "aa_avg_bank_balance_inr":250000,
-    "aa_trade_payable_days":28,
-    "aa_cash_flow_ratio":1.4,
-    "aa_emi_to_inflow_ratio":0.23,
-    "aa_overdraft_utilization_pct":18,
-
-    "epfo_registered":1,
-    "epfo_employee_count":42,
-    "epfo_contribution_consistency_pct":96,
-    "epfo_avg_wage_inr":24500,
-    "epfo_employee_growth_rate":0.14
-}
+# Compile assets for production build
+npm run build
 ```
 
 ---
 
-## Output
+## 🔌 API Gateway Endpoints
 
-```json
-{
-    "gst_score":83.4,
-    "upi_score":74.5,
-    "aa_score":78.9,
-    "epfo_score":69.1,
-    "overall_score":77.4,
-    "risk_tier":"A - Strong",
-    "data_confidence":"4/4 sources available"
-}
-```
+### Scoring & Auditing
+*   `GET /score/{enterprise_id}`: Looks up the CSV row for the enterprise, runs XGBoost evaluations, and returns pillar scores, fused score, SHAP contributors, embeddings, and verdict flags.
+*   `POST /score/custom`: Same as above, but allows the lender to override the default weights mapping (`GST: 0.35`, `UPI: 0.25`, `AA: 0.30`, `EPFO: 0.10`).
+
+### Borrower Gaps & Integration
+*   `GET /borrower/completeness-gap/{enterprise_id}`: Runs autoencoder completeness simulations, returning projected scores/tiers for missing sources that yield positive score-gaps.
+*   `GET /uli/payload/{enterprise_id}`: Compiles standard-compliant digital consent payloads dynamically from database parameters.
+
+### Portfolio Analysis
+*   `GET /portfolio/summary`: Aggregates active exposure, averages, defaults, and coverage rates.
+*   `GET /portfolio/inclusion-impact`: Aggregates Alt-Data onboarding statistics and PSL healthy-tier breakdowns.
+*   `POST /portfolio/simulate-stress`: Performs capital risk migrations and default projections under macroeconomic shocks.
 
 ---
 
-## Tech Stack
+## 📊 Technical Performance Matrix
 
-- Python
-- Scikit-Learn
-- FastAPI
-- Pandas
-- NumPy
+| Configuration / Modality Strategy | Fused Model AUC | Delta vs. Baseline | Impact & Rationale |
+| :--- | :---: | :---: | :--- |
+| **Baseline (Logistic Regression)** | 0.7609 | -- | Standard median imputation of missing features. |
+| **XGBoost + Pure Autoencoder Imputer** | 0.7723 | +0.0114 | Replaces all missing values with reconstructed features. Dilutes the informative "missingness" signal that trees rely on. |
+| **XGBoost + Modality-Aware Imputer** | 0.7873 | +0.0264 | Imputes missing fields only if the modality is registered. Preserves tree-level NaN splits for unregistered pillars. |
+| **Optimized Hybrid (Production)** | **0.8014** | **+0.0405** | Passes raw records with NaNs to XGBoost to maintain peak prediction splits, while extracting 6D embeddings for UI drift tracking. |
