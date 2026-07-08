@@ -7,10 +7,11 @@ import {
 import {
   RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer,
 } from 'recharts';
-import { API_BASE, DEMO_RECORD } from './api';
+import { API_BASE } from './api';
 import type {
   ScoreResponse, TrendResponse, PortfolioSummary,
-  StressSimulationResponse
+  StressSimulationResponse, CompletenessGapResponse,
+  InclusionImpactResponse
 } from './api';
 
 // ─── Color mappings ──────────────────────────────────────────
@@ -43,7 +44,7 @@ function Gauge({ label, score, tag, pillar }: GaugeProps) {
   const data = [{ value: val, fill: color }];
 
   return (
-    <div className="glass-card gauge-card">
+    <div className="gauge-card">
       {pillar && <span className="gauge-pillar">{pillar}</span>}
       <div style={{ width: 110, height: 80 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -56,7 +57,7 @@ function Gauge({ label, score, tag, pillar }: GaugeProps) {
           >
             <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
             <RadialBar
-              background={{ fill: 'rgba(255,255,255,0.03)' }}
+              background={{ fill: 'var(--surface-hi)' }}
               dataKey="value"
               angleAxisId={0}
               cornerRadius={4}
@@ -73,6 +74,44 @@ function Gauge({ label, score, tag, pillar }: GaugeProps) {
   );
 }
 
+const KPISparkline = () => (
+  <svg className="kpi-sparkline" width="100%" height="16" viewBox="0 0 100 16" style={{ marginTop: '6px', opacity: 0.6 }}>
+    <path
+      d="M 0 8 H 20 L 23 2 L 26 14 L 29 8 H 50 L 53 2 L 56 14 L 59 8 H 80 L 83 2 L 86 14 L 89 8 H 100"
+      fill="none"
+      stroke="var(--accent)"
+      strokeWidth="1.2"
+    />
+  </svg>
+);
+
+function renderJson(obj: any) {
+  if (!obj) return '// Loading ULI schema details...';
+  const str = JSON.stringify(obj, null, 2);
+  return str.split('\n').map((line, idx) => {
+    const keyMatch = line.match(/^(\s*)"([^"]+)":/);
+    if (keyMatch) {
+      const indent = keyMatch[1];
+      const key = keyMatch[2];
+      const rest = line.substring(keyMatch[0].length);
+      
+      let restSpan = <span>{rest}</span>;
+      if (rest.includes('"')) {
+        restSpan = <span className="json-value-string">{rest}</span>;
+      } else if (rest.match(/\d/)) {
+        restSpan = <span className="json-value-number">{rest}</span>;
+      }
+      
+      return (
+        <div key={idx}>
+          {indent}<span className="json-key">"{key}"</span>:{restSpan}
+        </div>
+      );
+    }
+    return <div key={idx}>{line}</div>;
+  });
+}
+
 // ─── Mock Enterprise List for quick CLI-search ───────────────
 const SEARCHABLE_MSMES = [
   { id: 'MSME100000', segment: 'Small', sector: 'Services' },
@@ -85,6 +124,93 @@ const SEARCHABLE_MSMES = [
   { id: 'MSME100007', segment: 'Medium', sector: 'Food Processing' }
 ];
 
+const getTranslatedMessage = (gap: any, lang: 'EN' | 'HI', score: any) => {
+  if (lang === 'EN') return gap.message;
+  
+  const sourceNames: Record<string, string> = {
+    'GST': 'जीएसटी (GST)',
+    'UPI': 'यूपीआई (UPI)',
+    'AA': 'अकाउंट एग्रीगेटर (AA)',
+    'EPFO': 'कर्मचारी भविष्य निधि (EPFO)'
+  };
+  
+  const source = sourceNames[gap.missing_source] || gap.missing_source;
+  
+  const tierNames: Record<string, string> = {
+    'Gold': 'गोल्ड (Gold)',
+    'Silver': 'सिल्वर (Silver)',
+    'Bronze': 'ब्रॉन्ज (Bronze)',
+    'Minimal': 'मिनिमल (Minimal)',
+    'Unscoreable': 'अनुपयोगी (Unscoreable)'
+  };
+  
+  const current_tier = tierNames[score.confidence_tier] || score.confidence_tier;
+  const projected_tier = tierNames[gap.projected_tier] || gap.projected_tier;
+  
+  const current_ci_val = score.confidence_tier === 'Gold' ? 3 : score.confidence_tier === 'Silver' ? 6 : score.confidence_tier === 'Bronze' ? 10 : 15;
+  
+  return `${source} को जोड़ने से आप ${current_tier} से ${projected_tier} श्रेणी में जा सकते हैं और आपका स्कोर लगभग +${gap.estimated_point_gain.toFixed(1)} अंक बढ़ सकता है, जिससे आपकी सटीकता रेंज ±${current_ci_val} से घटकर ±${gap.projected_confidence_interval} हो सकती है।`;
+};
+
+const getTranslatedRecommendation = (rec: any, lang: 'EN' | 'HI') => {
+  if (lang === 'EN') {
+    return { title: rec.title, recommendation: rec.recommendation };
+  }
+
+  const titleMap: Record<string, string> = {
+    "Ensure timely GST filing": "जीएसटी समय पर फाइल करें",
+    "Maintain consistent GST returns": "जीएसटी रिटर्न में निरंतरता रखें",
+    "Minimize payment bounces": "लेनदेन बाउंस कम करें",
+    "Stabilize monthly inflows": "मासिक नकद प्रवाह स्थिर करें",
+    "Reduce overdraft utilization": "ओवरड्राफ्ट उपयोगिता कम करें",
+    "Rationalize debt commitments": "ऋण प्रतिबद्धताओं को तर्कसंगत बनाएं",
+    "Improve cash surplus ratio": "नकद अधिशेष अनुपात में सुधार करें",
+    "Clear EPFO dues strictly": "ईपीएफओ बकाया का कड़ाई से भुगतान करें",
+    "Excel in alternate credit": "वैकल्पिक क्रेडिट में उत्कृष्ट प्रदर्शन"
+  };
+
+  let recommendation = rec.recommendation;
+
+  if (rec.title === "Ensure timely GST filing") {
+    const filingsMatch = rec.recommendation.match(/had (\d+)/);
+    const filings = filingsMatch ? filingsMatch[1] : "0";
+    recommendation = `समय पर जीएसटी फाइल करें। पिछले 12 महीनों में आपके ${filings} विलंबित फाइलिंग थे। +${rec.estimated_lift} अंक प्राप्त करने के लिए लगातार 3 महीनों तक GSTR-3B समय पर फाइल करें।`;
+  } else if (rec.title === "Maintain consistent GST returns") {
+    const consistencyMatch = rec.recommendation.match(/consistency is currently at ([\d.]+)%/);
+    const consistency = consistencyMatch ? consistencyMatch[1] : "90";
+    recommendation = `आपकी जीएसटी फाइलिंग निरंतरता वर्तमान में ${consistency}% है। +${rec.estimated_lift} अंक प्राप्त करने के लिए प्रत्येक रिपोर्टिंग अवधि में फाइल करने का लक्ष्य रखें।`;
+  } else if (rec.title === "Minimize payment bounces") {
+    const bounceMatch = rec.recommendation.match(/bounce rate is ([\d.]+)%/);
+    const bounce = bounceMatch ? bounceMatch[1] : "0";
+    recommendation = `आपका लेनदेन बाउंस दर ${bounce}% है। असफल ऑटो-डेबिट और ग्राहक बाउंस को रोकने के लिए पर्याप्त शेष राशि रखें ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Stabilize monthly inflows") {
+    recommendation = `नकद प्रवाह की अस्थिरता को कम करने के लिए ग्राहकों को थोक भुगतानों को साप्ताहिक या मासिक प्राप्तियों में विभाजित करने के लिए प्रोत्साहित करें ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Reduce overdraft utilization") {
+    const odMatch = rec.recommendation.match(/utilization is high \(([\d.]+)%\)/);
+    const od = odMatch ? odMatch[1] : "50";
+    recommendation = `आपकी ओडी उपयोगिता अधिक (${od}%) है। उधारदाताओं को यह दिखाने के लिए कि आपके पास आरामदायक तरलता स्थान है, इसे 50% से नीचे रखने का प्रयास करें ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Rationalize debt commitments") {
+    const emiMatch = rec.recommendation.match(/represent (\d+)%/);
+    const emi = emiMatch ? emiMatch[1] : "30";
+    recommendation = `मासिक ईएमआई बैंक प्रवाह का ${emi}% दर्शाती है। वर्तमान ऋण मूलधन आंशिक रूप से कम होने तक नया ऋण लेने से बचें ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Improve cash surplus ratio") {
+    const cfMatch = rec.recommendation.match(/coverage ratio \(([\d.]+)\)/);
+    const cf = cfMatch ? cfMatch[1] : "1.0";
+    recommendation = `नकद प्रवाह कवरेज अनुपात (${cf}) तंग है। तरल भंडार बढ़ाने के लिए आपूर्तिकर्ताओं के साथ संग्रह शर्तों को अनुकूलित करें ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Clear EPFO dues strictly") {
+    const epfoMatch = rec.recommendation.match(/consistency is ([\d.]+)%/);
+    const epfo = epfoMatch ? epfoMatch[1] : "100";
+    recommendation = `ईपीएफओ जमा निरंतरता ${epfo}% है। परिचालन स्थिरता साबित करने के लिए कर्मचारियों को समय पर सामाजिक सुरक्षा भुगतान करना महत्वपूर्ण है ताकि +${rec.estimated_lift} अंक प्राप्त हो सकें।`;
+  } else if (rec.title === "Excel in alternate credit") {
+    recommendation = `बहुत बढ़िया! सभी मेट्रिक्स स्वस्थ स्तर दिखा रहे हैं। कम ऋण दरें सुरक्षित करने के लिए जीएसटी फाइल करना, यूपीआई के माध्यम से प्राप्तियों को रूट करना और तरलता बनाए रखना जारी रखें।`;
+  }
+
+  return {
+    title: titleMap[rec.title] || rec.title,
+    recommendation: recommendation
+  };
+};
+
 export default function App() {
   // Views: 'lender' | 'borrower'
   const [activeView, setActiveView] = useState<'lender' | 'borrower'>('lender');
@@ -94,6 +220,9 @@ export default function App() {
   const [score, setScore] = useState<ScoreResponse | null>(null);
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [uliPayload, setUliPayload] = useState<Record<string, unknown> | null>(null);
+  const [completenessGap, setCompletenessGap] = useState<CompletenessGapResponse | null>(null);
+  const [inclusionImpact, setInclusionImpact] = useState<InclusionImpactResponse | null>(null);
+  const [expandedGap, setExpandedGap] = useState<string | null>(null);
 
   // Search overlay toggle
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -122,19 +251,15 @@ export default function App() {
     setScore(null);
     setTrend(null);
     setUliPayload(null);
-
-    // Derive inputs from DEMO_RECORD but overwrite with selected ID
-    const payload = { ...DEMO_RECORD, enterprise_id: id };
+    setCompletenessGap(null);
+    setExpandedGap(null);
 
     try {
-      const [scoreRes, trendRes, uliRes] = await Promise.all([
-        fetch(`${API_BASE}/score`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }),
+      const [scoreRes, trendRes, uliRes, gapRes] = await Promise.all([
+        fetch(`${API_BASE}/score/${encodeURIComponent(id)}`),
         fetch(`${API_BASE}/trend/${encodeURIComponent(id)}`),
-        fetch(`${API_BASE}/uli/payload/${encodeURIComponent(id)}`)
+        fetch(`${API_BASE}/uli/payload/${encodeURIComponent(id)}`),
+        fetch(`${API_BASE}/borrower/completeness-gap/${encodeURIComponent(id)}`)
       ]);
 
       if (!scoreRes.ok) {
@@ -147,6 +272,7 @@ export default function App() {
 
       if (trendRes.ok) setTrend(await trendRes.json());
       if (uliRes.ok) setUliPayload(await uliRes.json());
+      if (gapRes.ok) setCompletenessGap(await gapRes.json());
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -157,9 +283,15 @@ export default function App() {
   // ─── Fetch Portfolio Aggregate Summary ────────────────────────
   const fetchPortfolioSummary = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/portfolio/summary`);
+      const [res, inclRes] = await Promise.all([
+        fetch(`${API_BASE}/portfolio/summary`),
+        fetch(`${API_BASE}/portfolio/inclusion-impact`)
+      ]);
       if (res.ok) {
         setPortfolio(await res.json());
+      }
+      if (inclRes.ok) {
+        setInclusionImpact(await inclRes.json());
       }
     } catch (e) {
       console.error("Failed to fetch portfolio aggregates:", e);
@@ -271,27 +403,65 @@ export default function App() {
           <>
             {/* Top row: Portfolio Summary Cards */}
             {portfolio && (
-              <div className="grid-stats">
+              <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
                 <div className="glass-card">
                   <span className="stat-sub">Total Managed Exposure</span>
                   <div className="stat-value text-cyan">{portfolio.total_exposure.toLocaleString()}</div>
                   <span className="stat-sub">Active MSME Portfolios</span>
+                  <KPISparkline />
                 </div>
                 <div className="glass-card">
                   <span className="stat-sub">Portfolio Avg Health Score</span>
                   <div className="stat-value text-blue">{portfolio.average_score.toFixed(1)}</div>
                   <span className="stat-sub">Out of 100</span>
+                  <KPISparkline />
                 </div>
                 <div className="glass-card">
                   <span className="stat-sub">Defaults Flagged</span>
                   <div className="stat-value text-red">{portfolio.default_count}</div>
                   <span className="stat-sub">Default Rate: {portfolio.default_rate.toFixed(2)}%</span>
+                  <KPISparkline />
                 </div>
                 <div className="glass-card">
                   <span className="stat-sub">Alternative Coverage</span>
                   <div className="stat-value text-green">{portfolio.coverage.gst}%</div>
                   <span className="stat-sub">GST Registration Rate</span>
+                  <KPISparkline />
                 </div>
+                {inclusionImpact && (
+                  <div className="glass-card" style={{ gridColumn: 'span 1' }}>
+                    <span className="stat-sub">Alt-Data Onboarding</span>
+                    <div className="stat-value text-purple" style={{ fontSize: '1.4rem', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      {inclusionImpact.alt_data_only.toLocaleString()}
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>({inclusionImpact.alt_data_only_pct}%)</span>
+                    </div>
+                    <span className="stat-sub" style={{ display: 'block', fontSize: '0.65rem', marginBottom: '6px' }}>
+                      MSMEs Onboarded via Alt-Data (Credit-Invisible Otherwise)
+                    </span>
+                    <span className="stat-sub" style={{ fontSize: '0.62rem', color: 'var(--green)' }}>
+                      Of these, <strong>{inclusionImpact.alt_data_only_healthy_tier_count.toLocaleString()}</strong> are in healthy tiers
+                    </span>
+                    <KPISparkline />
+                    {inclusionImpact.alt_data_only_by_sector && (
+                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid var(--border)', paddingTop: '6px' }}>
+                        {Object.entries(inclusionImpact.alt_data_only_by_sector).slice(0, 3).map(([sec, count]) => {
+                          const pct = inclusionImpact.alt_data_only > 0 ? ((count as number) / inclusionImpact.alt_data_only * 100) : 0;
+                          return (
+                            <div key={sec} style={{ fontSize: '0.58rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '1px' }}>
+                                <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '60px' }}>{sec}</span>
+                                <span>{count} ({pct.toFixed(0)}%)</span>
+                              </div>
+                              <div className="driver-bar-bg" style={{ height: '3px' }}>
+                                <div className="driver-bar-value pos" style={{ width: `${pct}%`, height: '3px', background: 'var(--accent)' }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -307,7 +477,23 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="grid-gauges" style={{ marginBottom: '1.5rem' }}>
+                <div className="grid-gauges" style={{ marginBottom: '1.5rem', position: 'relative' }}>
+                  {/* The Fusion Pulse-Line ECG Connector */}
+                  <svg className="ecg-connector-svg" viewBox="0 0 100 20">
+                    <path
+                      d="M 10 10 H 90"
+                      fill="none"
+                      stroke="var(--border)"
+                      strokeWidth="0.5"
+                    />
+                    <path
+                      className="pulse-path"
+                      d="M 10 10 H 22 L 24 4 L 26 16 L 28 10 H 42 L 44 4 L 46 16 L 48 10 H 62 L 64 4 L 66 16 L 68 10 H 82 L 84 4 L 86 16 L 88 10"
+                      fill="none"
+                      stroke="var(--accent)"
+                      strokeWidth="1.2"
+                    />
+                  </svg>
                   <Gauge label="GST Compliance" score={score.gst_score} pillar="GST Pillar" />
                   <Gauge label="UPI Cash Flow" score={score.upi_score} pillar="UPI Pillar" />
                   <Gauge label="Bank Balance" score={score.aa_score} pillar="AA Pillar" />
@@ -477,7 +663,7 @@ export default function App() {
                   Mock payload exposed on the Unified Lending Interface (ULI) registry for secure consent-driven scoring.
                 </p>
                 <pre className="code-block">
-                  {uliPayload ? JSON.stringify(uliPayload, null, 2) : '// Loading ULI schema details...'}
+                  {renderJson(uliPayload)}
                 </pre>
               </div>
             </div>
@@ -550,7 +736,12 @@ export default function App() {
                         data={[{ value: score.overall_score ?? 0, fill: scoreColor(score.overall_score) }]}
                       >
                         <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
-                        <RadialBar dataKey="value" angleAxisId={0} cornerRadius={10} />
+                        <RadialBar
+                          background={{ fill: 'var(--surface-hi)' }}
+                          dataKey="value"
+                          angleAxisId={0}
+                          cornerRadius={10}
+                        />
                       </RadialBarChart>
                     </ResponsiveContainer>
                     <div className="circle-text">
@@ -584,25 +775,108 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Improve Your Score checklist */}
+                {completenessGap && (
+                  <div style={{ marginTop: '1rem', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '0.85rem' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Activity size={14} color="var(--accent)" />
+                      {lang === 'EN' ? 'Improve Your Score' : 'अपना स्कोर सुधारें'}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {completenessGap.gaps.map((gap) => {
+                        const isExpanded = expandedGap === gap.missing_source;
+                        return (
+                          <div 
+                            key={gap.missing_source} 
+                            style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', cursor: 'pointer', background: 'var(--bg)' }}
+                            onClick={() => setExpandedGap(isExpanded ? null : gap.missing_source)}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ width: '12px', height: '12px', border: '1.5px solid var(--text-secondary)', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
+                                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {gap.missing_source === 'AA' ? 'Account Aggregator' : gap.missing_source}
+                                </span>
+                              </div>
+                              <div className="coach-lift">
+                                {gap.estimated_point_gain >= 0 ? '+' : ''}{gap.estimated_point_gain.toFixed(1)} pts
+                              </div>
+                            </div>
+                            
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '4px', paddingLeft: '18px' }}>
+                              {getTranslatedMessage(gap, lang, score)}
+                            </div>
+
+                            {isExpanded && (
+                              <div style={{ marginTop: '8px', padding: '8px', background: 'var(--surface-hi)', borderRadius: '6px', fontSize: '0.62rem', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '6px', marginLeft: '18px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <span>{lang === 'EN' ? 'Confidence Migration' : 'सटीकता श्रेणी बदलाव'}:</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span className={`confidence-chip ${tierBadgeClass(score.confidence_tier)}`} style={{ padding: '1px 4px', fontSize: '0.55rem' }}>
+                                      {score.confidence_tier}
+                                    </span>
+                                    <span>→</span>
+                                    <span className={`confidence-chip ${tierBadgeClass(gap.projected_tier)}`} style={{ padding: '1px 4px', fontSize: '0.55rem' }}>
+                                      {gap.projected_tier}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>{lang === 'EN' ? 'Confidence Margin' : 'सटीकता रेंज'}:</span>
+                                  <span>±{score.confidence_tier === 'Gold' ? 3 : score.confidence_tier === 'Silver' ? 6 : score.confidence_tier === 'Bronze' ? 10 : 15} → ±{gap.projected_confidence_interval} Points</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <span>{lang === 'EN' ? 'Projected Score' : 'अनुमानित स्कोर'}:</span>
+                                  <span style={{ fontWeight: 700, color: 'var(--green)' }}>{score.overall_score?.toFixed(1)} → {gap.projected_score.toFixed(1)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {['GST', 'UPI', 'AA', 'EPFO']
+                        .filter(src => !completenessGap.gaps.some(g => g.missing_source === src))
+                        .map(src => (
+                          <div key={src} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border)', borderRadius: '8px', padding: '8px', background: 'rgba(15, 122, 92, 0.04)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <CheckCircle2 size={12} color="var(--green)" style={{ flexShrink: 0 }} />
+                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                {src === 'AA' ? 'Account Aggregator' : src}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.6rem', color: 'var(--green)', fontWeight: 700 }}>
+                              {lang === 'EN' ? 'Connected' : 'सम्बद्ध'}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Recommendations Coach section */}
-                <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ marginTop: '1.5rem' }}>
                   <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <ShieldCheck size={14} color="var(--green)" />
                     {lang === 'EN' ? 'Actionable Credit Coach' : 'क्रेडिट सुधार सुझाव'}
                   </div>
                   <div className="coach-list">
-                    {score.recommendations.map((rec, idx) => (
-                      <div className="coach-card" key={idx}>
-                        <CheckCircle2 size={16} color="var(--blue)" style={{ flexShrink: 0, marginTop: 2 }} />
-                        <div className="coach-body">
-                          <div className="coach-title">{rec.title}</div>
-                          <div className="coach-desc">{rec.recommendation}</div>
+                    {score.recommendations.map((rec, idx) => {
+                      const translated = getTranslatedRecommendation(rec, lang);
+                      return (
+                        <div className="coach-card" key={idx}>
+                          <CheckCircle2 size={16} color="var(--accent)" style={{ flexShrink: 0, marginTop: 2 }} />
+                          <div className="coach-body">
+                            <div className="coach-title">{translated.title}</div>
+                            <div className="coach-desc">{translated.recommendation}</div>
+                          </div>
+                          {rec.estimated_lift > 0 && (
+                            <div className="coach-lift">+{rec.estimated_lift}</div>
+                          )}
                         </div>
-                        {rec.estimated_lift > 0 && (
-                          <div className="coach-lift">+{rec.estimated_lift}</div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

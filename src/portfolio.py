@@ -234,3 +234,60 @@ def run_stress_test(
             for t in standard_tiers
         }
     }
+
+
+# -----------------------------------------------------------------
+# Public API: alternate data inclusion impact metric
+# -----------------------------------------------------------------
+
+def get_inclusion_impact() -> dict:
+    """
+    Quantifies alternate-data underwriting reach at the portfolio level.
+    """
+    df = _load_scored_portfolio()
+    if df.empty:
+        return {"error": "Portfolio data not available."}
+
+    # Filter only scored businesses (where overall_score is not null)
+    scored_df = df[df["overall_score"].notna()]
+    total_portfolio = len(scored_df)
+
+    if total_portfolio == 0:
+        return {
+            "total_portfolio": 0,
+            "traditionally_scoreable": 0,
+            "alt_data_only": 0,
+            "alt_data_only_pct": 0.0,
+            "alt_data_only_healthy_tier_count": 0,
+            "alt_data_only_flagged_tier_count": 0,
+            "alt_data_only_by_sector": {}
+        }
+
+    # Traditionally scoreable: has GST (gst_registered == 1)
+    traditionally_scoreable = int(scored_df["gst_registered"].eq(1).sum())
+
+    # Alt data only: GST absent (gst_registered != 1)
+    alt_data_df = scored_df[~scored_df["gst_registered"].eq(1)]
+    alt_data_only = len(alt_data_df)
+
+    alt_data_only_pct = round((alt_data_only / total_portfolio * 100), 1)
+
+    # Health vs flagged classification:
+    # A - Strong and B - Moderate are healthy; C - Weak and D - High Risk are flagged.
+    healthy_mask = alt_data_df["risk_tier"].str.startswith(('A', 'B'), na=False)
+    healthy_count = int(healthy_mask.sum())
+    flagged_count = int((~healthy_mask).sum())
+
+    # Sector breakdown for alt_data_only
+    sector_counts = alt_data_df["sector"].value_counts().to_dict()
+    alt_data_by_sector = {str(k): int(v) for k, v in sector_counts.items()}
+
+    return {
+        "total_portfolio": total_portfolio,
+        "traditionally_scoreable": traditionally_scoreable,
+        "alt_data_only": alt_data_only,
+        "alt_data_only_pct": alt_data_only_pct,
+        "alt_data_only_healthy_tier_count": healthy_count,
+        "alt_data_only_flagged_tier_count": flagged_count,
+        "alt_data_only_by_sector": alt_data_by_sector
+    }

@@ -130,3 +130,31 @@ export const DEMO_RECORD = {
   epfo_avg_wage_inr: 24500,
   epfo_employee_growth_rate: 0.14,
 };
+
+export interface CompletenessGapItem {
+  missing_source: string;
+  projected_tier: string;
+  projected_score: number;
+  projected_confidence_interval: number;
+  estimated_point_gain: number;
+  message: string;
+}
+
+export interface CompletenessGapResponse {
+  enterprise_id: string;
+  current_tier: string;
+  current_score: number;
+  current_confidence_interval: number;
+  gaps: CompletenessGapItem[];
+  message?: string;
+}
+
+export interface InclusionImpactResponse {
+  total_portfolio: number;
+  traditionally_scoreable: number;
+  alt_data_only: number;
+  alt_data_only_pct: number;
+  alt_data_only_healthy_tier_count: number;
+  alt_data_only_flagged_tier_count: number;
+  alt_data_only_by_sector: Record<string, number>;
+}

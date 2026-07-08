@@ -24,10 +24,10 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.scoring   import score_business
+from src.scoring   import score_business, get_completeness_gap
 from src.trend     import compute_trend
 from src.config    import FUSION_WEIGHTS
-from src.portfolio import get_portfolio_summary, run_stress_test
+from src.portfolio import get_portfolio_summary, run_stress_test, get_inclusion_impact
 from src.uli       import get_uli_consent_profile
 
 app = FastAPI(
@@ -197,6 +197,24 @@ def score(
     return result
 
 
+@app.get("/score/{enterprise_id}", response_model=ScoreResponse, tags=["Scoring"])
+def get_score_by_id(enterprise_id: str):
+    from src.config import DATASET_PATH
+    import pandas as pd
+    df = pd.read_csv(DATASET_PATH)
+    record_row = df[df["enterprise_id"] == enterprise_id]
+    if record_row.empty:
+        raise HTTPException(status_code=404, detail=f"Enterprise {enterprise_id} not found.")
+    raw_record = record_row.iloc[0].to_dict()
+    record = {k: (None if pd.isna(v) else v) for k, v in raw_record.items()}
+    for flag in ["gst_registered", "upi_available", "aa_consent_given", "epfo_registered"]:
+        if flag in record and record[flag] is not None:
+            record[flag] = int(float(record[flag]))
+    result = score_business(record, explain=True)
+    result["enterprise_id"] = enterprise_id
+    return result
+
+
 @app.post("/score/custom", response_model=ScoreResponse, tags=["Scoring"])
 def score_custom(
     request: CustomWeightRequest,
@@ -303,3 +321,19 @@ def uli_payload(enterprise_id: str):
     }
     scores = score_business(demo_dict, explain=True)
     return get_uli_consent_profile(enterprise_id, scores)
+
+
+@app.get("/borrower/completeness-gap/{enterprise_id}", tags=["Borrower"])
+def completeness_gap(enterprise_id: str):
+    res = get_completeness_gap(enterprise_id)
+    if "error" in res:
+        raise HTTPException(status_code=404, detail=res["error"])
+    return res
+
+
+@app.get("/portfolio/inclusion-impact", tags=["Portfolio"])
+def inclusion_impact():
+    res = get_inclusion_impact()
+    if "error" in res:
+        raise HTTPException(status_code=404, detail=res["error"])
+    return res

@@ -203,7 +203,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
 
     # 1. GST Compliance recommendation
     if record.get("gst_registered") == 1:
-        late_filings = record.get("gst_late_filing_count_12m", 0)
+        late_filings = record.get("gst_late_filing_count_12m")
+        late_filings = 0 if late_filings is None else late_filings
         if late_filings > 0:
             impact = abs(neg_drivers.get("gst_late_filing_count_12m", -5.0))
             lift = round(impact * 0.8, 1)
@@ -213,7 +214,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
                 "recommendation": f"Avoid filing GST late. You had {int(late_filings)} late filing(s) in the last 12 months. File GSTR-3B on time for 3 consecutive months to gain +{lift} points.",
                 "estimated_lift": lift,
             })
-        consistency = record.get("gst_filing_consistency_pct", 100)
+        consistency = record.get("gst_filing_consistency_pct")
+        consistency = 100 if consistency is None else consistency
         if consistency < 90:
             impact = abs(neg_drivers.get("gst_filing_consistency_pct", -4.0))
             lift = round(impact * 0.9, 1)
@@ -226,7 +228,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
 
     # 2. UPI Cash Flow recommendation
     if record.get("upi_available") == 1:
-        bounce_rate = record.get("upi_bounce_rate_pct", 0)
+        bounce_rate = record.get("upi_bounce_rate_pct")
+        bounce_rate = 0 if bounce_rate is None else bounce_rate
         if bounce_rate > 3.0:
             impact = abs(neg_drivers.get("upi_bounce_rate_pct", -6.0))
             lift = round(impact * 1.2, 1)
@@ -236,7 +239,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
                 "recommendation": f"Your transaction bounce rate is {bounce_rate}%. Keep sufficient balance to prevent failed auto-debits and customer bounces to gain +{lift} points.",
                 "estimated_lift": lift,
             })
-        volatility = record.get("upi_inflow_volatility", 0)
+        volatility = record.get("upi_inflow_volatility")
+        volatility = 0 if volatility is None else volatility
         if volatility > 0.4:
             impact = abs(neg_drivers.get("upi_inflow_volatility", -3.0))
             lift = round(impact * 0.7, 1)
@@ -249,7 +253,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
 
     # 3. Account Aggregator Bank balance / leverage
     if record.get("aa_consent_given") == 1:
-        od_util = record.get("aa_overdraft_utilization_pct", 0)
+        od_util = record.get("aa_overdraft_utilization_pct")
+        od_util = 0 if od_util is None else od_util
         if od_util > 60:
             impact = abs(neg_drivers.get("aa_overdraft_utilization_pct", -8.0))
             lift = round(impact * 1.1, 1)
@@ -259,7 +264,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
                 "recommendation": f"Your OD utilization is high ({od_util}%). Try to keep it below 50% to show lenders you have comfortable liquidity room to gain +{lift} points.",
                 "estimated_lift": lift,
             })
-        emi_ratio = record.get("aa_emi_to_inflow_ratio", 0)
+        emi_ratio = record.get("aa_emi_to_inflow_ratio")
+        emi_ratio = 0 if emi_ratio is None else emi_ratio
         if emi_ratio > 0.35:
             impact = abs(neg_drivers.get("aa_emi_to_inflow_ratio", -7.0))
             lift = round(impact * 1.0, 1)
@@ -269,7 +275,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
                 "recommendation": f"Monthly EMIs represent {round(emi_ratio*100)}% of bank inflow. Avoid taking fresh debt until current loan principal is partly reduced to gain +{lift} points.",
                 "estimated_lift": lift,
             })
-        cash_flow = record.get("aa_cash_flow_ratio", 1.5)
+        cash_flow = record.get("aa_cash_flow_ratio")
+        cash_flow = 1.5 if cash_flow is None else cash_flow
         if cash_flow < 1.1:
             impact = abs(neg_drivers.get("aa_cash_flow_ratio", -4.0))
             lift = round(impact * 0.8, 1)
@@ -282,7 +289,8 @@ def generate_coaching_recommendations(record: dict, key_drivers: list[dict]) -> 
 
     # 4. EPFO Employment stability
     if record.get("epfo_registered") == 1:
-        contrib = record.get("epfo_contribution_consistency_pct", 100)
+        contrib = record.get("epfo_contribution_consistency_pct")
+        contrib = 100 if contrib is None else contrib
         if contrib < 95:
             impact = abs(neg_drivers.get("epfo_contribution_consistency_pct", -5.0))
             lift = round(impact * 1.0, 1)
@@ -315,9 +323,11 @@ def score_business(record: dict, explain: bool = True) -> dict:
     models, explainers = load_artifacts()
 
     # ── Autoencoder Imputation & Self-Supervised Embedding ──
-    from src.imputation import impute_and_embed
-    # Compute the self-supervised embedding
-    _, embedding = impute_and_embed(record)
+    embedding = []
+    if explain:
+        from src.imputation import impute_and_embed
+        # Compute the self-supervised embedding
+        _, embedding = impute_and_embed(record)
 
     # Pass the raw record (with NaNs intact) to maximize XGBoost native split AUC
     record_df = _prepare_record_df(record)
@@ -388,4 +398,114 @@ def score_business(record: dict, explain: bool = True) -> dict:
         "decision":        decision,
         "recommendations": recommendations,
         "self_supervised_embedding": embedding,
+    }
+
+
+# -----------------------------------------------------------
+# Data Completeness Gap Insight
+# -----------------------------------------------------------
+
+def get_completeness_gap(enterprise_id: str) -> dict:
+    """
+    Identifies missing data modalities for a given enterprise, simulates
+    connecting each missing source using autoencoder reconstruction,
+    and returns projected tiers, scores, and interval deltas.
+    """
+    from src.config import DATASET_PATH
+    
+    df = pd.read_csv(DATASET_PATH)
+    record_row = df[df["enterprise_id"] == enterprise_id]
+    if record_row.empty:
+        return {"error": f"Enterprise {enterprise_id} not found."}
+        
+    raw_record = record_row.iloc[0].to_dict()
+    record = {k: (None if pd.isna(v) else v) for k, v in raw_record.items()}
+    
+    # Cast flags to integers if present
+    for flag in ["gst_registered", "upi_available", "aa_consent_given", "epfo_registered"]:
+        if flag in record and record[flag] is not None:
+            record[flag] = int(float(record[flag]))
+
+    # Get current scores
+    current_res = score_business(record, explain=False)
+    current_score = current_res["overall_score"]
+    current_tier = current_res["confidence_tier"]
+    
+    # Calculate confidence interval from band offsets
+    current_low_offset, _ = compute_confidence_band(current_tier)
+    current_ci = abs(current_low_offset)
+
+    if current_tier == "Gold":
+        return {
+            "enterprise_id": enterprise_id,
+            "current_tier": "Gold",
+            "current_score": current_score,
+            "current_confidence_interval": current_ci,
+            "gaps": [],
+            "message": "All data sources connected — you're at the highest confidence tier."
+        }
+
+    pillars = ["gst", "upi", "aa", "epfo"]
+    flags = {
+        "gst": "gst_registered",
+        "upi": "upi_available",
+        "aa": "aa_consent_given",
+        "epfo": "epfo_registered"
+    }
+    
+    missing_pillars = [p for p in pillars if record.get(flags[p], 0) != 1]
+    
+    from src.imputation import impute_and_embed
+    gaps = []
+    
+    for s in missing_pillars:
+        sim_record = record.copy()
+        # Mark modality as present
+        sim_record[flags[s]] = 1
+        
+        # Reconstruct missing features via the autoencoder
+        imputed_sim_record, _ = impute_and_embed(sim_record)
+        
+        # Score the imputed record
+        sim_res = score_business(imputed_sim_record, explain=False)
+        projected_score = sim_res["overall_score"]
+        projected_tier = sim_res["confidence_tier"]
+        
+        projected_low_offset, _ = compute_confidence_band(projected_tier)
+        projected_ci = abs(projected_low_offset)
+        
+        estimated_point_gain = round(projected_score - current_score, 1)
+        
+        source_display_names = {
+            "gst": "GST",
+            "upi": "UPI",
+            "aa": "Account Aggregator",
+            "epfo": "EPFO"
+        }
+        source_name = source_display_names[s]
+        
+        sign = "+" if estimated_point_gain >= 0 else ""
+        message = (
+            f"Connecting {source_name} could move you from {current_tier} to {projected_tier} tier "
+            f"and may increase your score by an estimated {sign}{estimated_point_gain:.1f} points, "
+            f"tightening your confidence range from ±{int(current_ci)} to ±{int(projected_ci)}."
+        )
+        
+        gaps.append({
+            "missing_source": s.upper(),
+            "projected_tier": projected_tier,
+            "projected_score": projected_score,
+            "projected_confidence_interval": projected_ci,
+            "estimated_point_gain": estimated_point_gain,
+            "message": message
+        })
+        
+    gaps.sort(key=lambda x: x["estimated_point_gain"], reverse=True)
+    
+    return {
+        "enterprise_id": enterprise_id,
+        "current_tier": current_tier,
+        "current_score": current_score,
+        "current_confidence_interval": current_ci,
+        "gaps": gaps
     }
