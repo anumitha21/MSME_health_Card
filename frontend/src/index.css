@@ -12,29 +12,34 @@
   --font-sans: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* Fintech Light Theme Palette */
-  --bg:             #FAFAF9; /* warm off-white canvas */
-  --surface:        #FFFFFF; /* clean card surface */
-  --surface-hover:  #FAFAF9;
-  --surface-hi:     #F3F5F7; /* light gray-blue background */
-  --border:         #E7E5E2; /* hairline border */
-  --border-hover:   #D1CECA;
+  /* Considered Dark Graphite Theme Palette */
+  --bg:             #0B0F14; /* cool charcoal-walnut dark canvas */
+  --surface:        #141A22; /* slightly lifted card slate */
+  --surface-hover:  #1F2833;
+  --surface-hi:     #1C242F; /* highlighter block dark */
+  --border:         #232B36; /* hairline border slate */
+  --border-hover:   #333E4D;
 
-  --text-primary:   #1B3A5C; /* deep banking navy */
-  --text-secondary: #5C6E84; /* slate secondary */
-  --text-muted:     #8E9EAF;
+  --text-primary:   #E9EDF2; /* soft off-white text */
+  --text-secondary: #7C8896; /* slate secondary text */
+  --text-muted:     #535E6B;
 
-  /* Trust & Accent */
-  --primary: #1B3A5C;
-  --accent:  #2E6F8E; /* muted teal-blue */
+  /* Restrained Brass/Gold for Business Value Accent */
+  --accent-gold:    #C9A15A;
+  
+  /* Muted Teal for Model Evidence Accent */
+  --accent:         #4FA8A0;
+  --primary:        #E9EDF2;
 
-  /* Signals */
-  --green:   #0F7A5C; /* deep emerald */
-  --amber:   #B8860B; /* muted gold/amber */
-  --red:     #B0413E; /* brick red */
-  --blue:    #1B3A5C; /* primary */
-  --purple:  #2E6F8E; /* mapped to accent/teal */
-  --cyan:    #2E6F8E; /* mapped to accent/teal */
+  /* Signals - price/underwrite status signals */
+  --green:          #3FAE7A; /* healthy green */
+  --amber:          #D1A23E; /* caution amber */
+  --orange:         #D1A23E;
+  --red:            #D66B62; /* risk red */
+  
+  --blue:           #4FA8A0; /* mapped to teal evidence */
+  --purple:         #4FA8A0; /* mapped to teal evidence */
+  --cyan:           #4FA8A0; /* mapped to teal evidence */
 
   --radius-sm: 8px;
   --radius:    12px;
@@ -124,8 +129,9 @@ body {
   font-family: var(--font-sans);
 }
 .view-btn.active {
-  background: var(--primary);
-  color: white;
+  background: rgba(201, 161, 90, 0.12); /* brass/gold at low opacity */
+  color: var(--accent-gold);
+  border: 1px solid rgba(201, 161, 90, 0.3);
 }
 
 .main-content {
@@ -372,15 +378,26 @@ body {
   pointer-events: none;
   z-index: 1;
 }
-.pulse-path {
-  stroke-dasharray: 2000;
-  stroke-dashoffset: 2000;
-  animation: draw-pulse-once 2.2s ease-out forwards;
+.static-pulse-path {
+  stroke-dasharray: none;
+}
+.animated-pulse-path {
+  stroke-dasharray: 20 120;
+  stroke-dashoffset: 140;
+  animation: singleGoldPulse 3.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
 }
 
-@keyframes draw-pulse-once {
-  to {
+@keyframes singleGoldPulse {
+  0% {
+    stroke-dashoffset: 140;
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
     stroke-dashoffset: 0;
+    opacity: 0; /* Fade out gold trace once it finishes the run */
   }
 }
 
@@ -813,3 +830,103 @@ body {
 .text-red { color: var(--red) !important; }
 .text-amber { color: var(--amber) !important; }
 .text-purple { color: var(--accent) !important; }
+.text-gold { color: var(--accent-gold) !important; }
+
+/* ─── Business Impact Hero Band ───────────────────────── */
+.business-hero-band {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent-gold); /* brass gold rule */
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 0.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.business-hero-band::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(201, 161, 90, 0.025));
+  pointer-events: none;
+}
+.hero-impact-title {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+.hero-impact-main {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.hero-impact-num {
+  font-family: var(--font-display);
+  font-size: 2.5rem;
+  font-weight: 600;
+  color: var(--accent-gold);
+  line-height: 1;
+}
+.hero-impact-label {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.hero-impact-secondary {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: 0.25rem;
+}
+
+/* ─── Model Evidence Collapsible ───────────────────────── */
+.model-evidence-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.5rem;
+  margin-top: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  transition: background var(--transition);
+}
+.model-evidence-header:hover {
+  background: rgba(255, 255, 255, 0.01);
+}
+.model-evidence-title {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent); /* evidence teal */
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.model-evidence-toggle-icon {
+  transition: transform var(--transition);
+  color: var(--text-secondary);
+}
+.model-evidence-toggle-icon.open {
+  transform: rotate(90deg);
+}
+.model-evidence-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  transition: all var(--transition);
+}

@@ -13,11 +13,26 @@ from typing import Optional
 # Mock ULI Consent JSON Payload Builder
 # -----------------------------------------------------------------
 
-def get_uli_consent_profile(enterprise_id: str, score_results: dict) -> dict:
+def get_uli_consent_profile(enterprise_id: str, score_results: dict, record: Optional[dict] = None) -> dict:
     """
     Wraps the scoring result in a format compliant with ULI Consent Data specs.
     Reflects the entity's profile as shared via ULI Gateway with consent.
     """
+    rec_dict = record if record is not None else {}
+    
+    # Format dynamic values compliant with database fields
+    gst_consistency_str = f"{float(rec_dict.get('gst_filing_consistency_pct')):.1f}%" if rec_dict.get('gst_filing_consistency_pct') is not None else "91.0%"
+    gst_growth_str = f"{float(rec_dict.get('gst_turnover_growth_rate')):.1f}%" if rec_dict.get('gst_turnover_growth_rate') is not None else "12.0%"
+    
+    upi_txn_str = str(int(float(rec_dict.get('upi_monthly_txn_count')))) if rec_dict.get('upi_monthly_txn_count') is not None else "320"
+    upi_bounce_str = f"{float(rec_dict.get('upi_bounce_rate_pct')):.1f}%" if rec_dict.get('upi_bounce_rate_pct') is not None else "0.8%"
+    
+    aa_emi_str = f"{round(float(rec_dict.get('aa_emi_to_inflow_ratio')) * 100, 1)}%" if rec_dict.get('aa_emi_to_inflow_ratio') is not None else "23.0%"
+    aa_od_str = f"{float(rec_dict.get('aa_overdraft_utilization_pct')):.1f}%" if rec_dict.get('aa_overdraft_utilization_pct') is not None else "18.0%"
+    
+    epfo_emp_str = str(int(float(rec_dict.get('epfo_employee_count')))) if rec_dict.get('epfo_employee_count') is not None else "42"
+    epfo_wage_str = f"{int(float(rec_dict.get('epfo_avg_wage_inr'))):,}" if rec_dict.get('epfo_avg_wage_inr') is not None else "24,500"
+
     return {
         "uli_metadata": {
             "gateway_version": "1.0.0-rc3",
@@ -46,32 +61,32 @@ def get_uli_consent_profile(enterprise_id: str, score_results: dict) -> dict:
                 "available": score_results.get("gst_score") is not None,
                 "score": score_results.get("gst_score"),
                 "key_indices": [
-                    {"code": "GST_CON", "label": "Filing Consistency", "value": "91.0%"},
-                    {"code": "GST_GRW", "label": "Turnover Growth Rate", "value": "12.0%"},
+                    {"code": "GST_CON", "label": "Filing Consistency", "value": gst_consistency_str},
+                    {"code": "GST_GRW", "label": "Turnover Growth Rate", "value": gst_growth_str},
                 ]
             },
             "upi_pillar": {
                 "available": score_results.get("upi_score") is not None,
                 "score": score_results.get("upi_score"),
                 "key_indices": [
-                    {"code": "UPI_TXN", "label": "Monthly Txn Count", "value": "320"},
-                    {"code": "UPI_BNC", "label": "UPI Bounce Rate", "value": "0.8%"},
+                    {"code": "UPI_TXN", "label": "Monthly Txn Count", "value": upi_txn_str},
+                    {"code": "UPI_BNC", "label": "UPI Bounce Rate", "value": upi_bounce_str},
                 ]
             },
             "aa_pillar": {
                 "available": score_results.get("aa_score") is not None,
                 "score": score_results.get("aa_score"),
                 "key_indices": [
-                    {"code": "AA_EMI", "label": "EMI Inflow Burden", "value": "23.0%"},
-                    {"code": "AA_ODU", "label": "Overdraft Utilisation", "value": "18.0%"},
+                    {"code": "AA_EMI", "label": "EMI Inflow Burden", "value": aa_emi_str},
+                    {"code": "AA_ODU", "label": "Overdraft Utilisation", "value": aa_od_str},
                 ]
             },
             "epfo_pillar": {
                 "available": score_results.get("epfo_score") is not None,
                 "score": score_results.get("epfo_score"),
                 "key_indices": [
-                    {"code": "EPF_EMP", "label": "Employee Count", "value": "42"},
-                    {"code": "EPF_WAG", "label": "Average Wage (INR)", "value": "24,500"},
+                    {"code": "EPF_EMP", "label": "Employee Count", "value": epfo_emp_str},
+                    {"code": "EPF_WAG", "label": "Average Wage (INR)", "value": epfo_wage_str},
                 ]
             }
         },

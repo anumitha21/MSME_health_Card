@@ -214,6 +214,7 @@ const getTranslatedRecommendation = (rec: any, lang: 'EN' | 'HI') => {
 export default function App() {
   // Views: 'lender' | 'borrower'
   const [activeView, setActiveView] = useState<'lender' | 'borrower'>('lender');
+  const [showModelEvidence, setShowModelEvidence] = useState(true);
   const [, setEnterpriseId] = useState('MSME100001');
 
   // Enterprise details
@@ -401,9 +402,30 @@ export default function App() {
         {/* ─── LENDER CONSOLE VIEW ───────────────────────────────── */}
         {activeView === 'lender' && (
           <>
+            {/* New Business Impact Hero Band (brass/gold) */}
+            {inclusionImpact && (
+              <div className="business-hero-band">
+                <div className="hero-impact-title">Business Growth & Priority Sector Lending (PSL) Impact</div>
+                <div className="hero-impact-main">
+                  <span className="hero-impact-num">
+                    {inclusionImpact.alt_data_only.toLocaleString()}
+                  </span>
+                  <span className="hero-impact-label">
+                    New MSMEs onboarded strictly via Alternate Data (Credit-Invisible Otherwise)
+                  </span>
+                </div>
+                <div className="hero-impact-secondary">
+                  Estimated Addressable Lending Exposure: <strong className="text-gold">₹{((inclusionImpact.alt_data_only * 1500000) / 10000000).toFixed(2)} Cr</strong> (at avg ₹15L per MSME)
+                </div>
+                <div className="hero-impact-secondary">
+                  Inclusion Funnel: <strong className="text-green">{inclusionImpact.alt_data_only_healthy_tier_count.toLocaleString()}</strong> alt-data-only MSMEs are in healthy risk tiers (A/B) and eligible for priority-sector lending (PSL) compliance.
+                </div>
+              </div>
+            )}
+
             {/* Top row: Portfolio Summary Cards */}
             {portfolio && (
-              <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+              <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 <div className="glass-card">
                   <span className="stat-sub">Total Managed Exposure</span>
                   <div className="stat-value text-cyan">{portfolio.total_exposure.toLocaleString()}</div>
@@ -428,45 +450,23 @@ export default function App() {
                   <span className="stat-sub">GST Registration Rate</span>
                   <KPISparkline />
                 </div>
-                {inclusionImpact && (
-                  <div className="glass-card" style={{ gridColumn: 'span 1' }}>
-                    <span className="stat-sub">Alt-Data Onboarding</span>
-                    <div className="stat-value text-purple" style={{ fontSize: '1.4rem', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                      {inclusionImpact.alt_data_only.toLocaleString()}
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>({inclusionImpact.alt_data_only_pct}%)</span>
-                    </div>
-                    <span className="stat-sub" style={{ display: 'block', fontSize: '0.65rem', marginBottom: '6px' }}>
-                      MSMEs Onboarded via Alt-Data (Credit-Invisible Otherwise)
-                    </span>
-                    <span className="stat-sub" style={{ fontSize: '0.62rem', color: 'var(--green)' }}>
-                      Of these, <strong>{inclusionImpact.alt_data_only_healthy_tier_count.toLocaleString()}</strong> are in healthy tiers
-                    </span>
-                    <KPISparkline />
-                    {inclusionImpact.alt_data_only_by_sector && (
-                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid var(--border)', paddingTop: '6px' }}>
-                        {Object.entries(inclusionImpact.alt_data_only_by_sector).slice(0, 3).map(([sec, count]) => {
-                          const pct = inclusionImpact.alt_data_only > 0 ? ((count as number) / inclusionImpact.alt_data_only * 100) : 0;
-                          return (
-                            <div key={sec} style={{ fontSize: '0.58rem' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: '1px' }}>
-                                <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '60px' }}>{sec}</span>
-                                <span>{count} ({pct.toFixed(0)}%)</span>
-                              </div>
-                              <div className="driver-bar-bg" style={{ height: '3px' }}>
-                                <div className="driver-bar-value pos" style={{ width: `${pct}%`, height: '3px', background: 'var(--accent)' }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Collapsible Model Evidence Section Header */}
+            {score && (
+              <div className="model-evidence-header" onClick={() => setShowModelEvidence(prev => !prev)}>
+                <div className="model-evidence-title">
+                  <Layers size={14} /> Underwriting Model Evidence (ML Internals)
+                </div>
+                <div className={`model-evidence-toggle-icon ${showModelEvidence ? 'open' : ''}`} style={{ fontSize: '0.6rem' }}>
+                  {showModelEvidence ? '▼' : '▶'}
+                </div>
               </div>
             )}
 
             {/* Middle row: Live Scored Gauges for Lookup */}
-            {score && (
+            {score && showModelEvidence && (
               <div className="glass-card">
                 <div className="card-header">
                   <div className="card-title">
@@ -487,11 +487,19 @@ export default function App() {
                       strokeWidth="0.5"
                     />
                     <path
-                      className="pulse-path"
+                      className="static-pulse-path"
                       d="M 10 10 H 22 L 24 4 L 26 16 L 28 10 H 42 L 44 4 L 46 16 L 48 10 H 62 L 64 4 L 66 16 L 68 10 H 82 L 84 4 L 86 16 L 88 10"
                       fill="none"
                       stroke="var(--accent)"
                       strokeWidth="1.2"
+                      opacity="0.35"
+                    />
+                    <path
+                      className="animated-pulse-path"
+                      d="M 10 10 H 22 L 24 4 L 26 16 L 28 10 H 42 L 44 4 L 46 16 L 48 10 H 62 L 64 4 L 66 16 L 68 10 H 82 L 84 4 L 86 16 L 88 10"
+                      fill="none"
+                      stroke="var(--accent-gold)"
+                      strokeWidth="1.5"
                     />
                   </svg>
                   <Gauge label="GST Compliance" score={score.gst_score} pillar="GST Pillar" />
@@ -545,7 +553,7 @@ export default function App() {
                         </span>
                         <div style={{ display: 'flex', gap: '6px' }}>
                           {score.self_supervised_embedding.map((val, idx) => (
-                            <div key={idx} style={{ flex: 1, textAlign: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 0' }}>
+                            <div key={idx} style={{ flex: 1, textAlign: 'center', background: 'var(--surface-hi)', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 0' }}>
                               <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--cyan)' }}>{val.toFixed(2)}</div>
                               <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)' }}>Z_{idx}</div>
                             </div>

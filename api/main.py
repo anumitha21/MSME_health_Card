@@ -289,38 +289,19 @@ def simulate_stress(request: StressSimulationRequest):
 
 @app.get("/uli/payload/{enterprise_id}", tags=["ULI/OCEN Integration"])
 def uli_payload(enterprise_id: str):
-    # Retrieve base mock data structure
-    demo_dict = {
-        "enterprise_id": enterprise_id,
-        "segment": "Small",
-        "sector": "Manufacturing",
-        "years_in_operation": 7.5,
-        "is_ntc": 0,
-        "is_ntb": 0,
-        "gst_registered": 1,
-        "gst_filing_consistency_pct": 91,
-        "gst_turnover_growth_rate": 12,
-        "gst_avg_monthly_turnover_inr": 420000,
-        "gst_late_filing_count_12m": 1,
-        "upi_available": 1,
-        "upi_monthly_txn_count": 320,
-        "upi_avg_inflow_inr": 1800,
-        "upi_inflow_volatility": 0.21,
-        "upi_bounce_rate_pct": 0.8,
-        "aa_consent_given": 1,
-        "aa_avg_bank_balance_inr": 250000,
-        "aa_trade_payable_days": 28,
-        "aa_cash_flow_ratio": 1.4,
-        "aa_emi_to_inflow_ratio": 0.23,
-        "aa_overdraft_utilization_pct": 18,
-        "epfo_registered": 1,
-        "epfo_employee_count": 42,
-        "epfo_contribution_consistency_pct": 96,
-        "epfo_avg_wage_inr": 24500,
-        "epfo_employee_growth_rate": 0.14,
-    }
-    scores = score_business(demo_dict, explain=True)
-    return get_uli_consent_profile(enterprise_id, scores)
+    from src.config import DATASET_PATH
+    import pandas as pd
+    df = pd.read_csv(DATASET_PATH)
+    record_row = df[df["enterprise_id"] == enterprise_id]
+    if record_row.empty:
+        raise HTTPException(status_code=404, detail=f"Enterprise {enterprise_id} not found.")
+    raw_record = record_row.iloc[0].to_dict()
+    record = {k: (None if pd.isna(v) else v) for k, v in raw_record.items()}
+    for flag in ["gst_registered", "upi_available", "aa_consent_given", "epfo_registered"]:
+        if flag in record and record[flag] is not None:
+            record[flag] = int(float(record[flag]))
+    scores = score_business(record, explain=True)
+    return get_uli_consent_profile(enterprise_id, scores, record)
 
 
 @app.get("/borrower/completeness-gap/{enterprise_id}", tags=["Borrower"])
