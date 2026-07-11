@@ -930,3 +930,158 @@ body {
   margin-top: 1rem;
   transition: all var(--transition);
 }
+
+/* ─── Lender tabs ─── */
+.lender-tabs {
+  display: flex;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+/* ─── Active Loans Sidebar ─── */
+.active-loans-sidebar {
+  max-height: 700px;
+  overflow-y: auto;
+}
+
+.active-loans-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.active-loan-item {
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.active-loan-item:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hi);
+  transform: translateY(-1px);
+}
+
+.active-loan-item.selected {
+  border-color: var(--accent-gold);
+  background: rgba(201, 161, 90, 0.05);
+  box-shadow: 0 0 10px rgba(201, 161, 90, 0.08);
+}
+
+.loan-item-id {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.loan-item-meta {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* ─── Status Dots ─── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.green { background-color: var(--green); }
+.status-dot.yellow { background-color: var(--amber); }
+.status-dot.red { background-color: var(--red); }
+
+.ews-status-text {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ews-status-text.green { color: var(--green); }
+.ews-status-text.yellow { color: var(--amber); }
+.ews-status-text.red { color: var(--red); }
+
+/* ─── EWS Badges ─── */
+.ews-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+.ews-badge.green {
+  background: rgba(63, 174, 122, 0.1);
+  color: var(--green);
+  border-color: rgba(63, 174, 122, 0.2);
+}
+.ews-badge.yellow {
+  background: rgba(209, 162, 62, 0.1);
+  color: var(--amber);
+  border-color: rgba(209, 162, 62, 0.2);
+}
+.ews-badge.red {
+  background: rgba(214, 107, 98, 0.1);
+  color: var(--red);
+  border-color: rgba(214, 107, 98, 0.2);
+  animation: pulse-red-border 2s infinite;
+}
+
+@keyframes pulse-red-border {
+  0% { box-shadow: 0 0 0 0 rgba(214, 107, 98, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(214, 107, 98, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(214, 107, 98, 0); }
+}
+
+/* ─── Stat Card Mini ─── */
+.stat-card-mini {
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-card-mini-title {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.stat-card-mini-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.text-red { color: var(--red) !important; }
+.text-green { color: var(--green) !important; }
+
+/* ─── Audit card additional styling ─── */
+.audit-justification-card {
+  border: 1px solid rgba(201, 161, 90, 0.15);
+  background: linear-gradient(135deg, var(--surface) 0%, rgba(20, 26, 34, 0.7) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.audit-justification-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-gold) 50%, transparent 100%);
+}
+

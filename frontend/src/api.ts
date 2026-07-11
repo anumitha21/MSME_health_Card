@@ -30,6 +30,7 @@ export interface ScoreResponse {
   decision: string;
   recommendations: CoachItem[];
   self_supervised_embedding?: number[];
+  audit_justification?: string;
 }
 
 export interface TrendMetric {
@@ -52,6 +53,11 @@ export interface TrendResponse {
   alert_flags: AlertFlag[];
   metrics: Record<string, TrendMetric>;
   data_available: boolean;
+  score_history?: { period: string; score: number }[];
+  score_drift?: number;
+  ews_status?: 'Green' | 'Yellow' | 'Red';
+  ews_justification?: string;
+  refreshed_at?: string;
   message?: string;
 }
 

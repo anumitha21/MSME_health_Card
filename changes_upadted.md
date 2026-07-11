@@ -63,3 +63,16 @@ Here is the log of all the updates, visual redesigns, backend enhancements, and 
 *   **Generic Gain Filter**: To prevent recommending score-decreasing actions to borrowers, we implemented an application-level filter in `get_completeness_gap` (`src/scoring.py`) that filters out any missing sources with `estimated_point_gain <= 0`.
 *   **UI Fallbacks**: If all missing sources for a borrower are simulated to yield zero or negative gains, the gaps list returns empty `[]` and displays the informational message: `"No further score improvements are projected from additional data source connections."`
 *   **Verification**: Verified across multiple missing-source combinations (`MSME100001`, `MSME100006`, and `MSME100020`), confirming the threshold filters out negative results generics-wide. All backend integration tests pass.
+
+---
+
+## 9. Full-Stack Real-Time Context Sync & Backend Integration
+*   **FastAPI Alternate-Data API**: Appended GET `/enterprise/{id}` endpoint in uvicorn to fetch raw parameters from the CSV synthetic database row.
+*   **Vite Global React Context Provider**: Created `CreditDataContext.tsx` to handle parallel data queries (`fetchScoreById`, `fetchTrend`, and `fetchEnterpriseRecord`) when the user selects a different MSME.
+*   **NavBar Selector select dropdown**: Mounted a corporate MSME dropdown menu in the navbar (`NavBar.tsx`) for global real-time profile shifting.
+*   **Dashboard Dynamic Bindings**:
+    *   *Borrower Dashboard*: Connected score meters to context outputs, SHAP drivers to dynamic strengths/risks, and coach advices to model recommendation payloads.
+    *   *Banker Dashboard*: Integrated checkmarks for knock-out rules, dynamic PD ratios, and live Gemini-generated audit justifications.
+    *   *Drill-down Dashboard*: Connected heatmaps and filing calendar counts to raw feature parameters.
+    *   *Simulator Dashboard*: Debounces slider changes and posts weight arrays directly to `/score/custom` on the live ML model, updating scores instantly.
+*   **Robust Failsafe Catch Handler**: Added try-catch blocks to prevent screen freezes, falling back to mock data if the backend server is run without reload or uvicorn caching old routes.

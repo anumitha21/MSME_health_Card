@@ -118,4 +118,24 @@ We evaluated the classification accuracy (AUC) of the Fused Underwriting Model a
 *   **Lender Dashboard**: Added a dedicated latent space panel showing the raw $Z$-values inside the underwriting card.
 *   **TypeScript Compilation**: Cleaned up React imports to build production assets under Vite with 0 errors.
 
+---
+
+## 6. Full-Stack Context Integration & Cross-Screen Synchronization (Vite & FastAPI)
+
+We transitioned the MSME Credit Scorer from disconnected mock screens to a unified, fully reactive, real-time application in sync with the ML backend APIs.
+
+### Backend Routing additions
+*   **Enterprise Record Lookup Route**: Added a GET `/enterprise/{enterprise_id}` route to query the pandas CSV database and serve raw feature values (tax consistencies, digital receipts, employees, bank balances) to the client.
+
+### Global React Context & State Lifting (`CreditDataContext.tsx`)
+*   **Lifting State**: Implemented a global React Context (`CreditDataProvider`) wrapping the entire routing tree to query `/score/{id}`, `/trend/{id}`, and `/enterprise/{id}` concurrently when the active enterprise changes.
+*   **Corporate Selector Dropdown**: Embedded an active MSME profile selector select-dropdown inside the global navigation header (`NavBar.tsx`) so lenders can switch between profiles (e.g. `MSME100001` vs `MSME100003`) from any tab.
+*   **Robust Catch-and-Fallback Failsafe**: Integrated dynamic catch blocks in the API loaders. If the backend FastAPI uvicorn worker runs an older code cache (or offline), it falls back to mock features rather than freezing the screen on a loading spinner.
+
+### Dynamic Dashboard Bindings
+*   **Borrower Dashboard (`/borrower`)**: Binds gauges, progress bars, and scores to the ML endpoints. Strengths and risks are mapped dynamically from positive/negative SHAP drivers, and collapsible improvement tasks display the re-scored lifespans computed by the model.
+*   **Banker Dashboard (`/banker`)**: Pulls exposure vintage, default risks, and PD% from context. Knock-out checkboxes (GST/EPFO/vintage) align dynamically with dataset parameters. Displays the live Gemini-generated audit justifications within the rationale panel.
+*   **Detailed Drill-down Tabsheets (`/drilldown`)**: Renders transaction heatmaps, filing calendars, and digital inflows utilizing raw values fetched from the selected profile.
+*   **Interactive Sandbox Simulator (`/simulator`)**: Tied directly to the `/score/custom` API. Moving weight sliders debounces and posts weight parameters to the ML backend in real time, calculating overall scores and score deltas instantly.
+
 

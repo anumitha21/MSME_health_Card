@@ -153,6 +153,7 @@ class ScoreResponse(BaseModel):
 
     recommendations: list[CoachItem] = []
     self_supervised_embedding: list[float] = []
+    audit_justification: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -194,6 +195,11 @@ def score(
 ):
     result = score_business(record.model_dump(), explain=explain)
     result["enterprise_id"] = record.enterprise_id
+    
+    # Generate audit justification using Gemini
+    from src.explain import generate_audit_justification
+    result["audit_justification"] = generate_audit_justification(result, record.model_dump())
+    
     return result
 
 
@@ -212,7 +218,29 @@ def get_score_by_id(enterprise_id: str):
             record[flag] = int(float(record[flag]))
     result = score_business(record, explain=True)
     result["enterprise_id"] = enterprise_id
+    
+    # Generate audit justification using Gemini
+    from src.explain import generate_audit_justification
+    result["audit_justification"] = generate_audit_justification(result, record)
+    
     return result
+
+
+@app.get("/enterprise/{enterprise_id}", tags=["Enterprise"])
+def get_enterprise_record(enterprise_id: str):
+    from src.config import DATASET_PATH
+    import pandas as pd
+    df = pd.read_csv(DATASET_PATH)
+    record_row = df[df["enterprise_id"] == enterprise_id]
+    if record_row.empty:
+        raise HTTPException(status_code=404, detail=f"Enterprise {enterprise_id} not found.")
+    raw_record = record_row.iloc[0].to_dict()
+    record = {k: (None if pd.isna(v) else v) for k, v in raw_record.items()}
+    # Convert flags to int
+    for flag in ["gst_registered", "upi_available", "aa_consent_given", "epfo_registered", "is_ntc", "is_ntb"]:
+        if flag in record and record[flag] is not None:
+            record[flag] = int(float(record[flag]))
+    return record
 
 
 @app.post("/score/custom", response_model=ScoreResponse, tags=["Scoring"])
@@ -237,6 +265,11 @@ def score_custom(
         cfg_module.FUSION_WEIGHTS.update(original)
 
     result["enterprise_id"] = request.enterprise_id
+    
+    # Generate audit justification using Gemini
+    from src.explain import generate_audit_justification
+    result["audit_justification"] = generate_audit_justification(result, record_dict)
+    
     return result
 
 

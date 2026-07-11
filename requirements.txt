@@ -7,3 +7,4 @@ joblib
 pydantic
 xgboost
 shap
+google-generativeai

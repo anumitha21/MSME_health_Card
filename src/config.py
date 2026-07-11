@@ -273,3 +273,10 @@ def load_feature_groups():
 def load_fusion_weights():
     with open(MODEL_DIR / "fusion_weights.json") as f:
         return json.load(f)
+
+
+# -----------------------------------------------------------------------------
+# Gemini AI Configuration
+# -----------------------------------------------------------------------------
+import os
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import {
   RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts';
 import { API_BASE } from './api';
 import type {
@@ -124,6 +125,17 @@ const SEARCHABLE_MSMES = [
   { id: 'MSME100007', segment: 'Medium', sector: 'Food Processing' }
 ];
 
+const ACTIVE_LOANS = [
+  { id: 'MSME100000', segment: 'Small', sector: 'Services', amount: '₹15,00,000', outstanding: '₹11,40,000', disbursedDate: '2025-04-12' },
+  { id: 'MSME100001', segment: 'Small', sector: 'Manufacturing', amount: '₹25,00,000', outstanding: '₹21,80,000', disbursedDate: '2025-01-20' },
+  { id: 'MSME100002', segment: 'Micro', sector: 'Trading/Retail', amount: '₹10,00,000', outstanding: '₹8,90,000', disbursedDate: '2025-06-05' },
+  { id: 'MSME100003', segment: 'Medium', sector: 'Construction', amount: '₹75,00,000', outstanding: '₹62,50,000', disbursedDate: '2024-11-10' },
+  { id: 'MSME100004', segment: 'Micro', sector: 'Agriculture & Allied', amount: '₹8,00,000', outstanding: '₹4,50,000', disbursedDate: '2025-03-15' },
+  { id: 'MSME100005', segment: 'Small', sector: 'IT/ITES', amount: '₹30,00,000', outstanding: '₹26,10,000', disbursedDate: '2025-02-18' },
+  { id: 'MSME100006', segment: 'Micro', sector: 'Textile', amount: '₹12,00,000', outstanding: '₹9,80,000', disbursedDate: '2025-05-22' },
+  { id: 'MSME100007', segment: 'Medium', sector: 'Food Processing', amount: '₹60,00,000', outstanding: '₹54,00,000', disbursedDate: '2024-12-01' }
+];
+
 const getConfidenceIntervalVal = (tier: string) => {
   if (tier === 'Gold') return 3;
   if (tier === 'Silver') return 6;
@@ -225,6 +237,8 @@ const getTranslatedRecommendation = (rec: any, lang: 'EN' | 'HI') => {
 export default function App() {
   // Views: 'lender' | 'borrower'
   const [activeView, setActiveView] = useState<'lender' | 'borrower'>('lender');
+  const [lenderTab, setLenderTab] = useState<'underwriting' | 'lifecycle'>('underwriting');
+  const [selectedActiveLoanId, setSelectedActiveLoanId] = useState('MSME100001');
   const [showModelEvidence, setShowModelEvidence] = useState(true);
   const [, setEnterpriseId] = useState('MSME100001');
 
@@ -353,6 +367,7 @@ export default function App() {
 
   const selectEnterprise = (id: string) => {
     setEnterpriseId(id);
+    setSelectedActiveLoanId(id);
     fetchEnterpriseData(id);
     setShowSearchModal(false);
   };
@@ -464,8 +479,28 @@ export default function App() {
               </div>
             )}
 
-            {/* Collapsible Model Evidence Section Header */}
-            {score && (
+            {/* Sub-tab selection */}
+            <div className="lender-tabs" style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1.5rem', marginTop: '1.5rem' }}>
+              <button
+                className={`view-btn ${lenderTab === 'underwriting' ? 'active' : ''}`}
+                onClick={() => setLenderTab('underwriting')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '8px 16px', borderRadius: '8px' }}
+              >
+                <ShieldCheck size={14} /> Pre-Disbursement Underwriting Scorer
+              </button>
+              <button
+                className={`view-btn ${lenderTab === 'lifecycle' ? 'active' : ''}`}
+                onClick={() => setLenderTab('lifecycle')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', padding: '8px 16px', borderRadius: '8px' }}
+              >
+                <Activity size={14} /> Post-Disbursement Lifecycle & EWS Monitor
+              </button>
+            </div>
+
+            {lenderTab === 'underwriting' && (
+              <>
+                {/* Collapsible Model Evidence Section Header */}
+                {score && (
               <div className="model-evidence-header" onClick={() => setShowModelEvidence(prev => !prev)}>
                 <div className="model-evidence-title">
                   <Layers size={14} /> Underwriting Model Evidence (ML Internals)
@@ -602,6 +637,27 @@ export default function App() {
                       })}
                     </div>
                   </div>
+
+                  {/* GenAI RBI Audit Justification Card */}
+                  {score.audit_justification && (
+                    <div className="glass-card audit-justification-card" style={{ gridColumn: 'span 2', marginTop: '1.25rem' }}>
+                      <div className="card-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-gold)' }}>
+                          <ShieldCheck size={16} /> RBI Fair-Lending Compliance Audit Trail
+                        </div>
+                        <span className="ko-badge" style={{ background: 'rgba(201, 161, 90, 0.1)', color: 'var(--accent-gold)', borderColor: 'rgba(201, 161, 90, 0.2)' }}>
+                          Verified Compliance Log
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '0.8rem', lineHeight: '1.6', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
+                        {score.audit_justification}
+                      </p>
+                      <div style={{ marginTop: '0.75rem', fontSize: '0.68rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                        <span>Underwriting Engine: XGBoost + SHAP + Rules v3.2</span>
+                        <span>Audited At: {new Date().toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -721,7 +777,232 @@ export default function App() {
                 </div>
               </div>
             )}
+              </>
+            )}
           </>
+        )}
+
+        {/* ─── POST-DISBURSEMENT LIFECYCLE MONITORING ─── */}
+        {activeView === 'lender' && lenderTab === 'lifecycle' && (
+          <div className="grid-portfolio" style={{ gridTemplateColumns: '1fr 2fr', alignItems: 'start', marginTop: '1rem', width: '100%' }}>
+            {/* Left side: Active Loan Portfolio List */}
+            <div className="glass-card active-loans-sidebar">
+              <div className="card-title" style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Database size={14} /> Active Disbursed Loans
+              </div>
+              <div className="active-loans-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {ACTIVE_LOANS.map(loan => {
+                  const isSelected = selectedActiveLoanId === loan.id;
+                  
+                  // Pre-calculate status and drift
+                  let loanStatus = 'Green';
+                  let driftText = 'Stable';
+                  
+                  if (loan.id === 'MSME100000') { loanStatus = 'Green'; driftText = '+2.1 pts'; }
+                  else if (loan.id === 'MSME100001') { loanStatus = 'Green'; driftText = '+0.8 pts'; }
+                  else if (loan.id === 'MSME100002') { loanStatus = 'Yellow'; driftText = '-6.5 pts'; }
+                  else if (loan.id === 'MSME100003') { loanStatus = 'Yellow'; driftText = '-5.2 pts'; }
+                  else if (loan.id === 'MSME100004') { loanStatus = 'Green'; driftText = '+1.5 pts'; }
+                  else if (loan.id === 'MSME100005') { loanStatus = 'Red'; driftText = '-14.3 pts'; }
+                  else if (loan.id === 'MSME100006') { loanStatus = 'Green'; driftText = '+0.2 pts'; }
+                  else if (loan.id === 'MSME100007') { loanStatus = 'Red'; driftText = '-11.9 pts'; }
+                  
+                  if (score && score.enterprise_id === loan.id && trend) {
+                    loanStatus = trend.ews_status || 'Green';
+                    driftText = trend.score_drift !== undefined ? `${trend.score_drift > 0 ? '+' : ''}${trend.score_drift.toFixed(1)} pts` : driftText;
+                  }
+
+                  const statusClass = `status-dot ${loanStatus.toLowerCase()}`;
+
+                  return (
+                    <div
+                      key={loan.id}
+                      className={`active-loan-item ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        setSelectedActiveLoanId(loan.id);
+                        fetchEnterpriseData(loan.id);
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span className="loan-item-id">{loan.id}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className={statusClass}></span>
+                          <span className={`ews-status-text ${loanStatus.toLowerCase()}`}>{loanStatus}</span>
+                        </div>
+                      </div>
+                      <div className="loan-item-meta" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        <span>Disbursed: {loan.amount}</span>
+                        <span className={driftText.includes('-') ? 'text-red' : 'text-green'}>{driftText}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right side: Detailed Monitoring Dashboard */}
+            {score && score.enterprise_id === selectedActiveLoanId && trend ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
+                
+                {/* Top panel: Summary Details */}
+                <div className="glass-card">
+                  <div className="card-header" style={{ marginBottom: '1.25rem' }}>
+                    <div>
+                      <div className="card-title" style={{ fontSize: '1.1rem' }}>
+                        Monitoring File: {score.enterprise_id}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        Segment: {score.risk_tier} | Connected Feeds: {score.data_confidence}
+                      </div>
+                    </div>
+                    <span className={`ews-badge ${trend.ews_status?.toLowerCase()}`}>
+                      EWS Rating: {trend.ews_status}
+                    </span>
+                  </div>
+
+                  {/* Sub-grid of active stats */}
+                  <div className="grid-stats" style={{ gridTemplateColumns: 'repeat(3, 1fr)', padding: 0, border: 0, gap: '1rem', marginBottom: '0.5rem' }}>
+                    <div className="stat-card-mini">
+                      <span className="stat-card-mini-title">Active Loan Amount</span>
+                      <span className="stat-card-mini-val">{ACTIVE_LOANS.find(l => l.id === score.enterprise_id)?.amount}</span>
+                    </div>
+                    <div className="stat-card-mini">
+                      <span className="stat-card-mini-title">Current Outstanding</span>
+                      <span className="stat-card-mini-val">{ACTIVE_LOANS.find(l => l.id === score.enterprise_id)?.outstanding}</span>
+                    </div>
+                    <div className="stat-card-mini">
+                      <span className="stat-card-mini-title">90-Day Score Drift</span>
+                      <span className={`stat-card-mini-val ${trend.score_drift !== undefined && trend.score_drift < 0 ? 'text-red' : 'text-green'}`}>
+                        {trend.score_drift !== undefined ? `${trend.score_drift > 0 ? '+' : ''}${trend.score_drift.toFixed(1)}` : '0.0'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Historical Score Chart & Drift Table */}
+                <div className="grid-portfolio" style={{ gridTemplateColumns: '1fr 1fr', gap: '1.5rem', margin: 0 }}>
+                  {/* Chart */}
+                  <div className="glass-card">
+                    <div className="card-title" style={{ marginBottom: '1rem' }}>
+                      90-Day Credit Score Trajectory
+                    </div>
+                    <div style={{ width: '100%', height: 160 }}>
+                      {trend.score_history && trend.score_history.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={trend.score_history} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                            <XAxis dataKey="period" stroke="var(--text-secondary)" fontSize={10} tickLine={false} />
+                            <YAxis domain={[0, 100]} stroke="var(--text-secondary)" fontSize={10} tickLine={false} />
+                            <Tooltip
+                              contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '6px' }}
+                              labelStyle={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)' }}
+                              itemStyle={{ fontSize: '0.75rem', color: 'var(--accent)' }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="score"
+                              stroke="var(--accent)"
+                              strokeWidth={2}
+                              activeDot={{ r: 6 }}
+                              dot={{ r: 4 }}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                          No scoring history available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Drift table of feeds */}
+                  <div className="glass-card">
+                    <div className="card-title" style={{ marginBottom: '0.75rem' }}>
+                      Refreshed MoM Feeds
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                      {trend.metrics && Object.keys(trend.metrics).length > 0 ? (
+                        Object.keys(trend.metrics).map(mKey => {
+                          const m = trend.metrics[mKey];
+                          const hasDecline = m.mom_30d_pct !== null && m.mom_30d_pct < 0;
+                          const isWorsePayable = mKey === 'aa_trade_payable_days' && m.mom_30d_pct !== null && m.mom_30d_pct > 0;
+                          const isNegativeDrift = (hasDecline && mKey !== 'aa_trade_payable_days') || isWorsePayable;
+                          
+                          return (
+                            <div key={mKey} style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.4rem', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
+                                <span>{m.label}</span>
+                                <span className={isNegativeDrift ? 'text-red' : 'text-green'}>
+                                  {m.mom_30d_pct !== null ? `${m.mom_30d_pct > 0 ? '+' : ''}${m.mom_30d_pct}%` : 'N/A'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '0.68rem' }}>
+                                <span>T-90: {m['T-90'] ?? '—'}  |  T-60: {m['T-60'] ?? '—'}</span>
+                                <span style={{ color: 'var(--text-primary)' }}>Current (T-30): {m['T-30'] ?? '—'}</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                          No metrics drift data available
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* GenAI EWS Justification Audit Card */}
+                <div className="glass-card">
+                  <div className="card-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-gold)' }}>
+                      <ShieldCheck size={16} /> GenAI Post-Disbursement EWS Audit Log
+                    </div>
+                    <span className="ko-badge" style={{ background: 'rgba(201, 161, 90, 0.1)', color: 'var(--accent-gold)', borderColor: 'rgba(201, 161, 90, 0.2)' }}>
+                      Audited Compliance Trail
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', lineHeight: '1.6', color: 'var(--text-primary)', whiteSpace: 'pre-line' }}>
+                    {trend.ews_justification}
+                  </p>
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.68rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.5rem' }}>
+                    <span>Monitoring Interval: 30-Day Refreshed AA/UPI/GST feeds</span>
+                    <span>Updated: {new Date().toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                {/* Action Log / Next Steps */}
+                <div className="glass-card">
+                  <div className="card-title" style={{ marginBottom: '1rem' }}>
+                    Proactive Lender Intervention Workflows
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '8px 12px' }} onClick={() => alert("Scheduled Working Capital limit review meeting.")}>
+                      Request Limit Review
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '8px 12px' }} onClick={() => alert("Initiated ULI re-certification payload for consent update.")}>
+                      Trigger ULI Consent Recertification
+                    </button>
+                    {trend.ews_status === 'Red' && (
+                      <button className="btn btn-primary" style={{ background: 'var(--red)', color: 'white', border: 0, fontSize: '0.75rem', padding: '8px 12px' }} onClick={() => alert("Initiating restructuring discussions with the borrower.")}>
+                        Initiate Restructuring Proposal
+                      </button>
+                    )}
+                    <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '8px 12px' }} onClick={() => alert("Proactive alert message queued for borrower portal.")}>
+                      Email Borrower Alert
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            ) : (
+              <div className="glass-card" style={{ gridColumn: 'span 2', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                <RefreshCw size={24} style={{ animation: 'spin 2s linear infinite', marginBottom: '1rem' }} />
+                Loading Active Loan Details...
+              </div>
+            )}
+          </div>
         )}
 
         {/* ─── BORROWER MOBILE VIEW (COACHING APP) ────────────────── */}
