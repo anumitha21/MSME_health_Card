@@ -13,10 +13,16 @@ interface AnimatedCounterProps {
   decimals?: number;
   suffix?: string;
   className?: string;
+  style?: React.CSSProperties;
 }
-export function AnimatedCounter({ target, duration = 1500, decimals = 0, suffix = '', className = '' }: AnimatedCounterProps) {
+export function AnimatedCounter({ target, duration = 1000, decimals = 0, suffix = '', className = '', style }: AnimatedCounterProps) {
   const [current, setCurrent] = useState(0);
   useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      setCurrent(target);
+      return;
+    }
     const start = Date.now();
     const tick = () => {
       const elapsed = Date.now() - start;
@@ -28,7 +34,7 @@ export function AnimatedCounter({ target, duration = 1500, decimals = 0, suffix 
     requestAnimationFrame(tick);
   }, [target, duration]);
   return (
-    <span className={className}>
+    <span className={className} style={style}>
       {current.toFixed(decimals)}{suffix}
     </span>
   );
@@ -39,46 +45,46 @@ interface ScoreGaugeProps { score: number; size?: number; label?: string; }
 export function ScoreGauge({ score, size = 200, label }: ScoreGaugeProps) {
   const [displayed, setDisplayed] = useState(0);
   useEffect(() => {
-    const timer = setTimeout(() => setDisplayed(score), 200);
+    const timer = setTimeout(() => setDisplayed(score), 100);
     return () => clearTimeout(timer);
   }, [score]);
 
   const data = [{ value: displayed, fill: scoreToColor(score) }];
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size * 0.7 }}>
+    <div className="relative flex items-center justify-center animate-none" style={{ width: size, height: size * 0.7 }}>
       <RadialBarChart
         width={size}
         height={size * 0.7}
         cx={size / 2}
         cy={size * 0.6}
-        innerRadius={size * 0.32}
-        outerRadius={size * 0.45}
+        innerRadius={size * 0.35}
+        outerRadius={size * 0.42}
         startAngle={200}
         endAngle={-20}
-        data={[{ value: 100, fill: 'rgba(255,255,255,0.05)' }, ...data]}
-        barSize={size * 0.055}
+        data={[{ value: 100, fill: '#E2DBD0' }, ...data]}
+        barSize={6}
       >
-        <RadialBar background={{ fill: 'transparent' }} dataKey="value" cornerRadius={size * 0.02} />
+        <RadialBar background={{ fill: 'transparent' }} dataKey="value" cornerRadius={0} />
       </RadialBarChart>
       <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ paddingTop: size * 0.15 }}>
         <AnimatedCounter
           target={score}
-          duration={1200}
-          className="font-bold text-white leading-none"
+          duration={900}
+          className="font-bold font-serif-editorial text-[#0C182A] leading-none"
+          style={{ fontSize: size * 0.22 }}
         />
-        <span className="text-slate-400 font-medium" style={{ fontSize: size * 0.07 }}>/ 100</span>
-        {label && <span className="text-xs text-slate-500 mt-1">{label}</span>}
+        <span className="text-[#556B82] font-data-mono" style={{ fontSize: size * 0.06 }}>/ 100</span>
+        {label && <span className="text-xxs font-data-mono text-[#556B82] mt-1">{label}</span>}
       </div>
     </div>
   );
 }
 
 function scoreToColor(score: number) {
-  if (score >= 80) return '#10B981';
-  if (score >= 65) return '#3B82F6';
-  if (score >= 50) return '#F59E0B';
-  return '#EF4444';
+  if (score >= 75) return '#234E45'; // Forest Green
+  if (score >= 60) return '#7B5500'; // Amber/Gold
+  return '#8A332E'; // Rust Red
 }
 
 // ─── Sub-Score Radar ──────────────────────────────────────────────────────────
@@ -95,18 +101,18 @@ export function SubScoreRadar({ scores, size = 300 }: RadarChartProps) {
   ];
   return (
     <ResponsiveContainer width="100%" height={size}>
-      <RadarChart data={data} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
-        <PolarGrid stroke="rgba(255,255,255,0.06)" />
-        <PolarAngleAxis dataKey="subject" tick={{ fill: 'rgba(148,163,184,0.8)', fontSize: 11 }} />
+      <RadarChart data={data} margin={{ top: 10, right: 35, bottom: 10, left: 35 }}>
+        <PolarGrid stroke="#E2DBD0" />
+        <PolarAngleAxis dataKey="subject" tick={{ fill: '#556B82', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }} />
         <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
         <Radar
           name="Score"
           dataKey="A"
-          stroke="#10B981"
-          fill="#10B981"
-          fillOpacity={0.15}
-          strokeWidth={2}
-          dot={{ r: 4, fill: '#10B981', strokeWidth: 0 }}
+          stroke="#234E45"
+          fill="#234E45"
+          fillOpacity={0.12}
+          strokeWidth={1.5}
+          dot={{ r: 3, fill: '#234E45', strokeWidth: 0 }}
         />
       </RadarChart>
     </ResponsiveContainer>
@@ -115,12 +121,12 @@ export function SubScoreRadar({ scores, size = 300 }: RadarChartProps) {
 
 // ─── Sparkline ────────────────────────────────────────────────────────────────
 interface SparkLineProps { data: number[]; color?: string; height?: number; }
-export function SparkLine({ data, color = '#10B981', height = 32 }: SparkLineProps) {
+export function SparkLine({ data, color = '#234E45', height = 32 }: SparkLineProps) {
   const chartData = data.map((v, i) => ({ i, v }));
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
-        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} dot={false} />
+        <Line type="monotone" dataKey="v" stroke={color} strokeWidth={1.25} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -137,25 +143,31 @@ export function GlassAreaChart({ data, keys, height = 200 }: GlassAreaChartProps
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
         <defs>
-          {keys.map(k => (
-            <linearGradient key={k.key} id={`grad-${k.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={k.color} stopOpacity={0.25} />
-              <stop offset="95%" stopColor={k.color} stopOpacity={0} />
-            </linearGradient>
-          ))}
+          {keys.map(k => {
+            const mappedColor = k.color === '#10B981' || k.color === '#3B82F6' ? '#234E45' : k.color === '#F59E0B' ? '#7B5500' : '#8A332E';
+            return (
+              <linearGradient key={k.key} id={`grad-${k.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={mappedColor} stopOpacity={0.15} />
+                <stop offset="95%" stopColor={mappedColor} stopOpacity={0} />
+              </linearGradient>
+            );
+          })}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-        <XAxis dataKey="month" tick={{ fill: 'rgba(148,163,184,0.6)', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: 'rgba(148,163,184,0.6)', fontSize: 10 }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#FAF6F0" vertical={false} />
+        <XAxis dataKey="month" tick={{ fill: '#556B82', fontSize: 9, fontFamily: 'IBM Plex Mono, monospace' }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: '#556B82', fontSize: 9, fontFamily: 'IBM Plex Mono, monospace' }} axisLine={false} tickLine={false} />
         <Tooltip
-          contentStyle={{ background: 'rgba(12,22,45,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-          labelStyle={{ color: '#94A3B8', fontSize: 11 }}
-          itemStyle={{ fontSize: 11 }}
+          contentStyle={{ background: '#FAF8F5', border: '1px solid #E2DBD0', borderRadius: 0 }}
+          labelStyle={{ color: '#0C182A', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600 }}
+          itemStyle={{ fontSize: 10, fontFamily: 'IBM Plex Mono, monospace' }}
         />
-        {keys.map(k => (
-          <Area key={k.key} type="monotone" dataKey={k.key} stroke={k.color} strokeWidth={2}
-            fill={`url(#grad-${k.key})`} name={k.label} />
-        ))}
+        {keys.map(k => {
+          const mappedColor = k.color === '#10B981' || k.color === '#3B82F6' ? '#234E45' : k.color === '#F59E0B' ? '#7B5500' : '#8A332E';
+          return (
+            <Area key={k.key} type="monotone" dataKey={k.key} stroke={mappedColor} strokeWidth={1.5}
+              fill={`url(#grad-${k.key})`} name={k.label} />
+          );
+        })}
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -169,18 +181,21 @@ interface GlassBarChartProps {
 export function GlassBarChart({ data, height = 160 }: GlassBarChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 5, right: 5, left: -25, bottom: 5 }} barCategoryGap="35%">
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" horizontal vertical={false} />
-        <XAxis dataKey="name" tick={{ fill: 'rgba(148,163,184,0.6)', fontSize: 10 }} axisLine={false} tickLine={false} />
-        <YAxis domain={[0, 100]} tick={{ fill: 'rgba(148,163,184,0.6)', fontSize: 10 }} axisLine={false} tickLine={false} />
+      <BarChart data={data} margin={{ top: 5, right: 5, left: -25, bottom: 5 }} barCategoryGap="40%">
+        <CartesianGrid strokeDasharray="3 3" stroke="#FAF6F0" horizontal vertical={false} />
+        <XAxis dataKey="name" tick={{ fill: '#556B82', fontSize: 9, fontFamily: 'IBM Plex Mono, monospace' }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0, 100]} tick={{ fill: '#556B82', fontSize: 9, fontFamily: 'IBM Plex Mono, monospace' }} axisLine={false} tickLine={false} />
         <Tooltip
-          contentStyle={{ background: 'rgba(12,22,45,0.95)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-          labelStyle={{ color: '#94A3B8', fontSize: 11 }}
+          contentStyle={{ background: '#FAF8F5', border: '1px solid #E2DBD0', borderRadius: 0 }}
+          labelStyle={{ color: '#0C182A', fontSize: 10, fontFamily: 'IBM Plex Mono, monospace', fontWeight: 600 }}
         />
-        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-          {data.map((d, i) => (
-            <Cell key={i} fill={d.color || '#3B82F6'} fillOpacity={0.8} />
-          ))}
+        <Bar dataKey="value" radius={0}>
+          {data.map((d, i) => {
+            const mappedColor = d.color === '#10B981' || d.color === '#3B82F6' ? '#234E45' : d.color === '#F59E0B' ? '#7B5500' : '#8A332E';
+            return (
+              <Cell key={i} fill={mappedColor} fillOpacity={0.85} />
+            );
+          })}
         </Bar>
       </BarChart>
     </ResponsiveContainer>

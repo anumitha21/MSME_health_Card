@@ -1,26 +1,28 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   RefreshCw, CheckCircle2, AlertTriangle, XCircle, ArrowRight, 
-  Zap, Info, Database
+  Database
 } from 'lucide-react';
 import {
   fetchScoreById, fetchTrend, checkHealth, SAMPLE_ENTERPRISE_IDS,
   type ScoreResponse, type TrendResponse
 } from '../data/api';
-import { SubScoreRadar, GlassAreaChart } from '../components/Charts';
-import {
-  GlassCard, SectionHeader, ScoreTierBadge, ConfidenceBadge, ProgressBar,
-  InfoTooltip, SourceBadge
-} from '../components/ui';
+import { SubScoreRadar } from '../components/Charts';
+import { GlassAreaChart } from '../components/Charts';
 
-// ─── Animated Score Ring ──────────────────────────────────────────────────────
+// ─── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ score, size = 180 }: { score: number; size?: number }) {
   const [displayed, setDisplayed] = useState(0);
+
   useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      setDisplayed(score);
+      return;
+    }
     const start = Date.now();
-    const dur = 1400;
+    const dur = 1000;
     const tick = () => {
       const p = Math.min((Date.now() - start) / dur, 1);
       const e = 1 - Math.pow(1 - p, 3);
@@ -29,26 +31,30 @@ function ScoreRing({ score, size = 180 }: { score: number; size?: number }) {
     };
     requestAnimationFrame(tick);
   }, [score]);
-  const color = score >= 75 ? '#10B981' : score >= 60 ? '#3B82F6' : score >= 45 ? '#F59E0B' : '#EF4444';
-  const r = size * 0.4;
+
+  const color = score >= 75 ? '#234E45' : score >= 60 ? '#7B5500' : '#8A332E';
+  const r = size * 0.42;
   const circ = 2 * Math.PI * r;
+
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full -rotate-90">
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={size * 0.055} />
-        <motion.circle
-          cx={size/2} cy={size/2} r={r} fill="none" stroke={color}
-          strokeWidth={size * 0.055} strokeLinecap="round"
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#E2DBD0" strokeWidth="6" />
+        <circle
+          cx={size/2}
+          cy={size/2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="6"
           strokeDasharray={circ}
-          initial={{ strokeDashoffset: circ }}
-          animate={{ strokeDashoffset: circ * (1 - displayed / 100) }}
-          transition={{ duration: 1.4, ease: [0.34, 1.56, 0.64, 1] }}
-          style={{ filter: `drop-shadow(0 0 ${size * 0.04}px ${color})` }}
+          strokeDashoffset={circ * (1 - displayed / 100)}
+          className="transition-all duration-300"
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-black text-white" style={{ fontSize: size * 0.22 }}>{displayed}</span>
-        <span className="text-slate-400" style={{ fontSize: size * 0.08 }}>/ 100</span>
+        <span className="font-serif-editorial font-bold text-[#0C182A]" style={{ fontSize: size * 0.24 }}>{displayed}</span>
+        <span className="text-[#556B82] font-data-mono mt-1" style={{ fontSize: size * 0.08 }}>/ 100</span>
       </div>
     </div>
   );
@@ -57,23 +63,26 @@ function ScoreRing({ score, size = 180 }: { score: number; size?: number }) {
 // ─── EWS Status Banner ────────────────────────────────────────────────────────
 function EWSBanner({ trend }: { trend: TrendResponse }) {
   const cfg = {
-    Green:  { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', color: '#10B981', icon: CheckCircle2, text: 'On Track' },
-    Yellow: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.25)',  color: '#F59E0B', icon: AlertTriangle, text: 'Watch' },
-    Red:    { bg: 'rgba(239,68,68,0.1)',   border: 'rgba(239,68,68,0.25)',   color: '#EF4444', icon: XCircle, text: 'Alert' },
-  }[trend.ews_status] || { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.25)', color: '#10B981', icon: CheckCircle2, text: 'On Track' };
+    Green:  { bg: '#E6ECE9', border: '#C4D3CD', color: '#234E45', icon: CheckCircle2, text: 'ON TRACK' },
+    Yellow: { bg: '#FAF3E0', border: '#ECDDB0', color: '#7B5500', icon: AlertTriangle, text: 'WATCH' },
+    Red:    { bg: '#F5ECEB', border: '#ECCDCB', color: '#8A332E', icon: XCircle, text: 'CRITICAL ALERT' },
+  }[trend.ews_status] || { bg: '#E6ECE9', border: '#C4D3CD', color: '#234E45', icon: CheckCircle2, text: 'ON TRACK' };
+  
   const Icon = cfg.icon;
+  
   return (
-    <div className="p-4 rounded-xl border flex items-start gap-3"
-      style={{ background: cfg.bg, borderColor: cfg.border }}>
+    <div className="p-4 border flex items-start gap-3 rounded-none"
+      style={{ backgroundColor: cfg.bg, borderColor: cfg.border }}>
       <Icon size={18} style={{ color: cfg.color }} className="flex-shrink-0 mt-0.5" />
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-bold" style={{ color: cfg.color }}>EWS: {cfg.text}</span>
-          <span className="text-xs text-slate-400 badge-slate">{trend.ews_status}</span>
+        <div className="flex items-center gap-2 mb-1 font-data-mono text-xs">
+          <span className="font-bold" style={{ color: cfg.color }}>EWS SYSTEM: {cfg.text}</span>
         </div>
-        <p className="text-xs text-slate-300">{trend.ews_message}</p>
+        <p className="text-xs text-[#253954] mt-1">{trend.ews_message}</p>
         {trend.drift_detected && (
-          <p className="text-xs text-amber-400 mt-1 font-medium">⚠️ Score drift detected — {trend.recommendation}</p>
+          <p className="text-xs text-[#8A332E] mt-2 font-bold font-data-mono">
+            ⚠️ DRIFT DETECTED: {trend.recommendation.toUpperCase()}
+          </p>
         )}
       </div>
     </div>
@@ -82,7 +91,7 @@ function EWSBanner({ trend }: { trend: TrendResponse }) {
 
 // ─── Score Trend Chart ────────────────────────────────────────────────────────
 function TrendChart({ trend }: { trend: TrendResponse }) {
-  const data = trend.periods.map(p => ({
+  const data = (trend?.periods ?? []).map(p => ({
     month: p.label,
     score: p.overall_score,
     gst: p.gst_score ?? 0,
@@ -93,9 +102,9 @@ function TrendChart({ trend }: { trend: TrendResponse }) {
     <GlassAreaChart
       data={data}
       keys={[
-        { key: 'score', color: '#10B981', label: 'Overall' },
-        { key: 'gst',   color: '#F59E0B', label: 'GST' },
-        { key: 'upi',   color: '#34D399', label: 'UPI' },
+        { key: 'score', color: '#234E45', label: 'Fused score' },
+        { key: 'gst',   color: '#7B5500', label: 'GST sub-score' },
+        { key: 'upi',   color: '#8A332E', label: 'UPI sub-score' },
       ]}
       height={180}
     />
@@ -112,7 +121,6 @@ export default function LiveScore() {
   const [trend, setTrend] = useState<TrendResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Check backend on mount
   useEffect(() => {
     checkHealth().then(alive => {
       setBackendAlive(alive);
@@ -131,7 +139,7 @@ export default function LiveScore() {
       setScore(scoreData);
       setTrend(trendData);
     } catch (e: any) {
-      setError(e.message || 'Failed to load enterprise data');
+      setError(e.message || 'Failed to load enterprise data from backend');
     } finally {
       setLoading(false);
     }
@@ -142,233 +150,320 @@ export default function LiveScore() {
     aa: score.aa_score ?? 0, epfo: score.epfo_score ?? 0,
   } : { gst: 0, upi: 0, aa: 0, epfo: 0 };
 
-
   return (
-    <div className="min-h-screen pt-20 pb-12">
-      <div className="max-w-6xl mx-auto px-6">
-        <SectionHeader
-          title="Live Credit Assessment"
-          subtitle="Connected to the FastAPI ML backend at localhost:8000 — pulling real XGBoost scores, SHAP drivers, and EWS trend data from the MSME dataset."
-          badge={
-            backendAlive === null ? <span className="badge-slate">Checking…</span> :
-            backendAlive ? <span className="badge-emerald flex items-center gap-1.5"><Zap size={10} /> Backend Live</span> :
-            <span className="badge-red flex items-center gap-1.5"><XCircle size={10} /> Backend Offline</span>
-          }
-        />
+    <div className="min-h-screen pt-20 pb-16 bg-[#FAF8F5] text-[#1B2D4A] px-6 select-text">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Document Header */}
+        <div className="border border-[#E2DBD0] bg-white p-6 mb-8 text-[#0C182A]">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#E2DBD0] pb-4 mb-4 gap-4">
+            <div>
+              <span className="text-xxs font-data-mono font-bold tracking-widest text-[#8B704F] block uppercase">
+                FASTAPI REAL-TIME INTEGRATION
+              </span>
+              <h1 className="font-serif-editorial text-3xl font-bold tracking-tight mt-1">
+                Live Credit Calibration Desk
+              </h1>
+            </div>
+            
+            <div className="flex items-center gap-1.5 self-end sm:self-auto font-data-mono text-xs">
+              <span className="text-[#556B82] uppercase">API status:</span>
+              {backendAlive === null ? (
+                <span className="font-bold text-[#556B82] bg-[#F0EAE1] border border-[#D9CEBE] px-2 py-0.5">CHECKING...</span>
+              ) : backendAlive ? (
+                <span className="font-bold text-[#234E45] bg-[#E6ECE9] border border-[#C4D3CD] px-2 py-0.5 inline-flex items-center gap-1">
+                  ■ ML ENGINE ONLINE
+                </span>
+              ) : (
+                <span className="font-bold text-[#8A332E] bg-[#F5ECEB] border border-[#ECCDCB] px-2 py-0.5 inline-flex items-center gap-1">
+                  ▲ ML ENGINE OFFLINE
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="text-xs text-[#556B82] leading-relaxed max-w-3xl">
+            This module establishes connection to the model server at <code className="bg-[#FAF6F0] border border-[#E2DBD0] px-1 text-[#8A332E] font-data-mono">localhost:8000</code>.
+            Evaluations call the baseline XGBoost classifier calibration in real-time.
+          </div>
+        </div>
 
-        {/* Backend Offline notice */}
+        {/* Offline notice */}
         {backendAlive === false && (
-          <GlassCard className="p-5 mb-6 border-amber-500/20" style={{ borderColor: 'rgba(245,158,11,0.2)' }}>
+          <div className="border border-[#ECDDB0] bg-[#FAF3E0] p-5 mb-6 text-xs text-[#7B5500] leading-relaxed">
             <div className="flex items-start gap-3">
-              <AlertTriangle size={16} className="text-amber-400 mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={16} className="text-[#7B5500] mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-amber-400 mb-1">Backend not reachable at localhost:8000</p>
-                <p className="text-xs text-slate-400">
-                  Start the backend with: <code className="bg-white/5 px-1.5 py-0.5 rounded text-emerald-400">uvicorn api.main:app --host 127.0.0.1 --port 8000</code>
-                  {' '}from the MSME_health_Card directory. The prototype will continue to work with mock data in other screens.
+                <p className="font-bold uppercase font-data-mono">FastAPI backend server offline</p>
+                <p className="mt-1">
+                  To execute live predictions, launch the server in your developer console:
+                </p>
+                <code className="block bg-white border border-[#ECDDB0] p-2 mt-2 font-data-mono text-[#8A332E] whitespace-pre-wrap select-all">
+                  uvicorn api.main:app --host 127.0.0.1 --port 8000
+                </code>
+                <p className="mt-2 text-[#556B82] italic">
+                  * Other client portals will continue to bypass API calls using standard offline calibration templates.
                 </p>
               </div>
             </div>
-          </GlassCard>
+          </div>
         )}
 
-        {/* Enterprise selector */}
-        <GlassCard className="p-5 mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Database size={14} className="text-slate-400" />
-              <span className="text-sm text-slate-300 font-medium">Select Enterprise from Dataset:</span>
+        {/* Database selector */}
+        <div className="border border-[#E2DBD0] bg-white p-5 mb-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 font-data-mono text-xs">
+              <Database size={14} className="text-[#556B82]" />
+              <span className="text-[#0C182A] font-bold uppercase">SELECT TEST EXPOSURE PROFILE:</span>
             </div>
-            <div className="flex gap-2 flex-wrap flex-1">
+            
+            <div className="flex flex-wrap gap-2 flex-1 md:justify-center">
               {SAMPLE_ENTERPRISE_IDS.slice(0, 8).map(id => (
                 <button
                   key={id}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                    selected === id
-                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
-                      : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:border-white/10 hover:text-slate-200'
-                  }`}
+                  className="px-2.5 py-1.5 font-data-mono text-xs font-bold transition-colors cursor-pointer border"
+                  style={selected === id ? {
+                    backgroundColor: '#E6ECE9',
+                    borderColor: '#C4D3CD',
+                    color: '#234E45',
+                    borderRadius: '0px'
+                  } : {
+                    backgroundColor: '#FFFFFF',
+                    borderColor: '#E2DBD0',
+                    color: '#556B82',
+                    borderRadius: '0px'
+                  }}
                   onClick={() => { setSelected(id); loadEnterprise(id); }}
                 >
                   {id}
                 </button>
               ))}
             </div>
+            
             <button
-              className="btn-ghost text-xs"
               onClick={() => loadEnterprise(selected)}
               disabled={loading}
+              className="btn-ghost text-xs flex items-center gap-1"
             >
-              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
+              <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh Desk
             </button>
           </div>
-        </GlassCard>
+        </div>
 
-        {/* Error state */}
+        {/* Error panel */}
         {error && (
-          <GlassCard className="p-4 mb-6 border-red-500/20" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
-            <p className="text-red-400 text-sm flex items-center gap-2"><XCircle size={14} /> {error}</p>
-          </GlassCard>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
-            {[1,2,3].map(i => <div key={i} className="glass h-32 rounded-2xl" />)}
+          <div className="border border-[#ECCDCB] bg-[#F5ECEB] p-4 mb-6 text-xs font-data-mono text-[#8A332E]">
+            ▲ CONNECTION FAULT: {error}
           </div>
         )}
 
-        {/* Live Score Results */}
-        <AnimatePresence mode="wait">
-          {score && !loading && (
-            <motion.div key={selected} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-              {/* Header strip */}
-              <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <div>
-                  <h3 className="text-lg font-bold text-white">{score.enterprise_id}</h3>
-                  <p className="text-xs text-slate-400">{score.decision} · PD derived from tier mapping</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <ScoreTierBadge tier={score.risk_tier} />
-                  <ConfidenceBadge
-                    sources={['gold','silver','bronze'].includes(score.data_confidence.toLowerCase()) ? (score.data_confidence.toLowerCase() === 'gold' ? 4 : score.data_confidence.toLowerCase() === 'silver' ? 3 : 2) : 1}
-                    total={4}
-                    level={score.data_confidence}
-                  />
+        {/* Loading */}
+        {loading && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 font-data-mono text-xs text-[#556B82] animate-pulse">
+            {[1,2,3].map(i => (
+              <div key={i} className="border border-[#E2DBD0] bg-white p-6 h-40 flex items-center justify-center">
+                CALIBRATING SIGNAL STREAM...
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Live prediction panels */}
+        {score && !loading && (
+          <div className="space-y-8 animate-none">
+            
+            {/* Verification header banner */}
+            <div className="flex items-start justify-between border-b border-[#E2DBD0] pb-4 flex-wrap gap-4">
+              <div>
+                <span className="text-xxs font-data-mono font-bold text-[#8B704F] uppercase tracking-wide">
+                  CURRENT CALIBRATED RECORD
+                </span>
+                <h3 className="font-serif-editorial text-2xl font-bold text-[#0C182A] tracking-tight">{score.enterprise_id}</h3>
+                <p className="text-xs text-[#556B82] font-data-mono mt-0.5">{score.decision.toUpperCase()}</p>
+              </div>
+              
+              <div className="flex items-center gap-3 flex-wrap font-data-mono text-xs">
+                <span className="font-bold text-[#0C182A] border border-[#E2DBD0] px-2 py-0.5 bg-white">
+                  Tier {score.risk_tier}
+                </span>
+                <span className={`font-bold px-2 py-0.5 border ${
+                  score.data_confidence.toLowerCase() === 'gold' ? 'text-[#234E45] bg-[#E6ECE9] border-[#C4D3CD]' : 'text-[#7B5500] bg-[#FAF3E0] border-[#ECDDB0]'
+                }`}>
+                  ■ {score.data_confidence.toUpperCase()} CONFIDENCE
+                </span>
+              </div>
+            </div>
+
+            {/* Middle split: score circle + subradar + cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              
+              {/* Score Gauge */}
+              <div className="border border-[#E2DBD0] bg-white p-6 flex flex-col items-center justify-center text-center">
+                <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4 self-start">
+                  FUSED SCORE COEFFICIENT
+                </span>
+                
+                <ScoreRing score={score.overall_score ?? 0} size={150} />
+                
+                <div className="mt-4 font-data-mono text-xs text-[#556B82]">
+                  Baseline Uncertainty bounds: <span className="font-bold text-[#0C182A]">{score.score_range_low} – {score.score_range_high}</span>
                 </div>
               </div>
 
-              {/* Score hero + Radar + EWS */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
-                <GlassCard className="p-6 flex flex-col items-center text-center gap-4" glow="emerald">
-                  <ScoreRing score={score.overall_score ?? 0} size={160} />
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-slate-400">
-                      Range: <span className="text-white font-medium">{score.score_range_low?.toFixed(0)}–{score.score_range_high?.toFixed(0)}</span>
-                    </p>
-                    <div className="flex gap-1.5 flex-wrap justify-center">
-                      {(score.triggered_rules ?? []).slice(0, 2).map((r, i) => (
-                        <span key={i} className="badge-amber text-xxs">{r.replace('_', ' ')}</span>
-                      ))}
+              {/* Radar co-efficients */}
+              <div className="border border-[#E2DBD0] bg-white p-6">
+                <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase text-center mb-2">
+                  RADAR SUB-PILLAR READINGS
+                </span>
+                <SubScoreRadar scores={radarScores} size={200} />
+              </div>
+
+              {/* Sub-Pillar mini cards */}
+              <div className="border border-[#E2DBD0] bg-white p-6">
+                <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                  INDIVIDUAL PARAMETERS
+                </span>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { label: 'GST Sub-Score', val: score.gst_score,  color: '#234E45', source: 'gst'  as const },
+                    { label: 'UPI Sub-Score', val: score.upi_score,  color: '#234E45', source: 'upi'  as const },
+                    { label: 'AA Sub-Score',  val: score.aa_score,   color: '#7B5500', source: 'aa'   as const },
+                    { label: 'EPFO Sub-Score',val: score.epfo_score, color: '#8A332E', source: 'epfo' as const },
+                  ].map(s => (
+                    <div key={s.source} className="border border-[#E2DBD0] bg-[#FAF6F0] p-3">
+                      <span className="font-data-mono text-[9px] font-bold text-[#556B82] uppercase">{s.source.toUpperCase()} Index</span>
+                      <div className="text-2xl font-bold font-serif-editorial mt-1 mb-2" style={{ color: s.color }}>
+                        {s.val?.toFixed(0) ?? '—'}
+                      </div>
+                      
+                      {/* Flat ruled tracker */}
+                      <div className="progress-track">
+                        <div className="progress-fill" style={{ width: `${s.val ?? 0}%`, background: s.color }} />
+                      </div>
                     </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* EWS + Trajectory */}
+            {trend && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* Early warning signals */}
+                <div className="border border-[#E2DBD0] bg-white p-6 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                      RBI-MANDATED EARLY WARNING STATUS
+                    </span>
+                    <EWSBanner trend={trend} />
                   </div>
-                </GlassCard>
-
-                <GlassCard className="p-5">
-                  <p className="text-xs text-slate-400 mb-2 text-center">Pillar Breakdown</p>
-                  <SubScoreRadar scores={radarScores} size={200} />
-                </GlassCard>
-
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: 'GST Score',  val: score.gst_score,  color: '#F59E0B', source: 'gst'  as const },
-                      { label: 'UPI Score',  val: score.upi_score,  color: '#10B981', source: 'upi'  as const },
-                      { label: 'AA Score',   val: score.aa_score,   color: '#3B82F6', source: 'aa'   as const },
-                      { label: 'EPFO Score', val: score.epfo_score, color: '#8B5CF6', source: 'epfo' as const },
-                    ].map(s => (
-                      <GlassCard key={s.source} className="p-3">
-                        <SourceBadge source={s.source} size="sm" />
-                        <div className="text-xl font-black mt-2 mb-1" style={{ color: s.val ? s.color : '#64748B' }}>
-                          {s.val?.toFixed(0) ?? '—'}
+                  
+                  <div className="mt-4 pt-4 border-t border-[#FAF6F0] space-y-2 font-data-mono text-xs">
+                    {(trend.periods ?? []).map((p, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <span className="text-[#556B82]">{p.label} PERIOD CALIBRATION</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-[#0C182A]">{p.overall_score?.toFixed(0) ?? '—'}</span>
+                          <span className="text-[10px] font-bold text-[#0C182A] border border-[#E2DBD0] px-1.5 bg-[#FAF6F0]">
+                            Tier {p.risk_tier}
+                          </span>
                         </div>
-                        <ProgressBar value={s.val ?? 0} color={s.color} />
-                      </GlassCard>
+                      </div>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              {/* EWS + Trend Chart */}
-              {trend && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                  <GlassCard className="p-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <p className="text-sm font-bold text-white">Early Warning Signals (EWS)</p>
-                      <InfoTooltip text="RBI-mandated EWS monitoring — re-scored monthly. Flags drift before NPA materialises." />
-                    </div>
-                    <EWSBanner trend={trend} />
-                    <div className="mt-3 space-y-1">
-                      {trend.periods.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="text-slate-400">{p.label}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-white">{p.overall_score.toFixed(0)}</span>
-                            <span className="badge-slate">{p.risk_tier}</span>
-                            {p.drift_flags.length > 0 && <AlertTriangle size={10} className="text-amber-400" />}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </GlassCard>
-
-                  <GlassCard className="p-5">
-                    <p className="text-sm font-bold text-white mb-3">Score Trajectory</p>
-                    <TrendChart trend={trend} />
-                  </GlassCard>
+                {/* Score trajectory */}
+                <div className="border border-[#E2DBD0] bg-white p-6">
+                  <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                    SCORE TRAJECTORY DRIFT ANALYSIS
+                  </span>
+                  <TrendChart trend={trend} />
                 </div>
-              )}
 
-              {/* SHAP Drivers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                <GlassCard className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <p className="text-sm font-bold text-white">SHAP Key Drivers</p>
-                    <InfoTooltip text="SHAP (SHapley Additive exPlanations) quantifies exactly how much each feature contributed to the score — positive or negative. RBI requires this for fair-lending audits." />
-                  </div>
-                  <div className="space-y-2">
-                    {(score.key_drivers ?? []).slice(0, 6).map((d, i) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${d.type === 'Positive Driver' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-                        <span className="text-xs text-slate-300 flex-1 truncate">{d.feature.replace(/_/g, ' ')}</span>
-                        <span className={`text-xs font-bold ${d.type === 'Positive Driver' ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {d.impact > 0 ? '+' : ''}{d.impact.toFixed(2)}
+              </div>
+            )}
+
+            {/* SHAP Drivers and Action Recommendations */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              
+              {/* SHAP list */}
+              <div className="border border-[#E2DBD0] bg-white p-6">
+                <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                  SHAP ATTRIBUTION LOGS
+                </span>
+                
+                <div className="space-y-3 font-data-mono text-xs">
+                  {(score.key_drivers ?? []).slice(0, 6).map((d, i) => {
+                    const isPositive = d.type === 'Positive Driver';
+                    return (
+                      <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#FAF6F0]">
+                        <span className="text-[#0C182A] font-semibold truncate max-w-sm capitalize">
+                          {d.feature ? d.feature.replace(/_/g, ' ') : 'metric'}
+                        </span>
+                        
+                        <span className={`font-bold ${isPositive ? 'text-[#234E45]' : 'text-[#8A332E]'}`}>
+                          {isPositive ? `+${d.impact.toFixed(2)}` : `${d.impact.toFixed(2)}`}
                         </span>
                       </div>
-                    ))}
-                  </div>
-                </GlassCard>
+                    );
+                  })}
+                </div>
+              </div>
 
-                <GlassCard className="p-5">
-                  <p className="text-sm font-bold text-white mb-3">AI Coaching Recommendations</p>
-                  <div className="space-y-3">
-                    {(score.recommendations ?? []).slice(0, 3).map((r, i) => (
-                      <div key={i} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-bold text-white">{r.title}</span>
-                          <span className="text-emerald-400 text-xs font-bold">+{r.estimated_lift.toFixed(0)}pt</span>
-                        </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">{r.recommendation}</p>
+              {/* Action plan */}
+              <div className="border border-[#E2DBD0] bg-white p-6">
+                <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                  ACTION DIRECTIVE OPTIMIZATIONS
+                </span>
+                
+                <div className="space-y-3">
+                  {(score.recommendations ?? []).slice(0, 2).map((r, i) => (
+                    <div key={i} className="p-3 border border-[#E2DBD0] bg-[#FAF6F0]">
+                      <div className="flex items-baseline justify-between mb-1">
+                        <span className="text-xs font-bold text-[#0C182A]">{r.title}</span>
+                        <span className="font-serif-editorial text-sm font-bold text-[#234E45]">+{r.estimated_lift} Pts</span>
                       </div>
-                    ))}
-                  </div>
-                </GlassCard>
-              </div>
-
-              {/* GenAI Audit Trail */}
-              {score.audit_justification && (
-                <GlassCard className="p-5 mb-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-lg bg-blue-500/15 flex items-center justify-center">
-                      <Info size={12} className="text-blue-400" />
+                      <p className="text-xs text-[#556B82] leading-normal">{r.recommendation}</p>
                     </div>
-                    <p className="text-sm font-bold text-white">GenAI Audit Justification</p>
-                    <span className="badge-blue">Gemini 2.5 Flash</span>
-                    <InfoTooltip text="Generated by Gemini 2.5 Flash — satisfies RBI fair-lending explainability requirement. Exportable to loan file." />
-                  </div>
-                  <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/15">
-                    <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">{score.audit_justification}</p>
-                  </div>
-                </GlassCard>
-              )}
-
-              <div className="flex gap-3 flex-wrap">
-                <button className="btn-ghost" onClick={() => nav('/borrower')}>View Borrower Dashboard</button>
-                <button className="btn-primary" onClick={() => nav('/simulator')}>Run What-If Scenarios <ArrowRight size={13} /></button>
+                  ))}
+                </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+            </div>
+
+            {/* GenAI Audit Trail */}
+            {score.audit_justification && (
+              <div className="border border-[#E2DBD0] bg-white p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xxs font-data-mono font-bold tracking-widest text-[#8B704F] block uppercase">
+                    GENAI AUDIT EXPLAINABILITY MEMORANDUM
+                  </span>
+                  
+                  <span className="text-[9px] font-bold font-data-mono border border-[#C4D3CD] bg-[#E6ECE9] text-[#234E45] px-1.5 py-0.2">
+                    VERIFIED CALIBRATION
+                  </span>
+                </div>
+                
+                <div className="p-4 border border-[#E2DBD0] bg-[#FAF6F0] text-xs text-[#253954] leading-relaxed whitespace-pre-wrap font-sans-ui">
+                  {score.audit_justification}
+                </div>
+              </div>
+            )}
+
+            {/* Controls */}
+            <div className="flex gap-4 flex-wrap border-t border-[#E2DBD0] pt-6">
+              <button className="btn-ghost" onClick={() => nav('/borrower')}>Open Borrower Portal</button>
+              <button className="btn-ghost" onClick={() => nav('/banker')}>Open Banker Console</button>
+              <button className="btn-primary" onClick={() => nav('/simulator')}>Run What-If Scenarios <ArrowRight size={14} className="ml-1" /></button>
+            </div>
+
+          </div>
+        )}
+
       </div>
     </div>
   );

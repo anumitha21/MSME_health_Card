@@ -1,46 +1,51 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { SubScoreRadar } from '../components/Charts';
-import { GlassCard, SectionHeader, SourceBadge, ScoreTierBadge, ConfidenceBadge, InfoTooltip, ProgressBar } from '../components/ui';
 import { SOURCE_META } from '../data/mock';
 import { useCreditData } from '../context/CreditDataContext';
 
 function AnimatedScore({ score }: { score: number }) {
   const [displayed, setDisplayed] = useState(0);
+
   useEffect(() => {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      setDisplayed(score);
+      return;
+    }
     const start = Date.now();
-    const duration = 1600;
+    const duration = 1200;
     const tick = () => {
       const elapsed = Date.now() - start;
       const prog = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - prog, 3);
+      const eased = 1 - Math.pow(1 - prog, 3); // cubic easeOut
       setDisplayed(Math.round(eased * score));
       if (prog < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   }, [score]);
 
-  const color = score >= 75 ? '#10B981' : score >= 60 ? '#3B82F6' : '#F59E0B';
   return (
     <div className="relative flex flex-col items-center">
-      <div className="relative w-52 h-52">
+      <div className="relative w-48 h-48">
         <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-          <circle cx="100" cy="100" r="80" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+          <circle cx="100" cy="100" r="82" fill="none" stroke="#E9E6DF" strokeWidth="6" />
           <motion.circle
-            cx="100" cy="100" r="80" fill="none" stroke={color} strokeWidth="12"
+            cx="100" cy="100" r="82" fill="none" stroke="#C9A24B" strokeWidth="8"
+            strokeDasharray={`${2 * Math.PI * 82}`}
+            initial={{ strokeDashoffset: 2 * Math.PI * 82 }}
+            animate={{ strokeDashoffset: 2 * Math.PI * 82 * (1 - displayed / 100) }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
             strokeLinecap="round"
-            strokeDasharray={`${2 * Math.PI * 80}`}
-            initial={{ strokeDashoffset: 2 * Math.PI * 80 }}
-            animate={{ strokeDashoffset: 2 * Math.PI * 80 * (1 - displayed / 100) }}
-            transition={{ duration: 1.6, ease: [0.34, 1.56, 0.64, 1] }}
-            style={{ filter: `drop-shadow(0 0 8px ${color})` }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-5xl font-black text-white leading-none">{displayed}</span>
-          <span className="text-slate-400 text-sm font-medium">/ 100</span>
+          <span className="text-6xl font-bold font-serif-editorial text-[#0B1220] leading-none">
+            {displayed}
+          </span>
+          <span className="text-[#64748B] text-xs font-data-mono mt-1">/ 100</span>
         </div>
       </div>
     </div>
@@ -54,8 +59,10 @@ export default function BorrowerDashboard() {
 
   if (loading || !score || !record) {
     return (
-      <div className="min-h-screen pt-20 flex items-center justify-center">
-        <p className="text-sm font-bold text-slate-400 animate-pulse">Loading Live Health Card…</p>
+      <div className="min-h-screen pt-20 flex items-center justify-center bg-[#FAF8F3]">
+        <p className="text-sm font-data-mono text-[#64748B] animate-pulse">
+          SECURE CONNECTION ACTIVE · RETRIEVING BORROWER HEALTH DATA...
+        </p>
       </div>
     );
   }
@@ -67,210 +74,284 @@ export default function BorrowerDashboard() {
     epfo: score.epfo_score ?? 0
   };
 
-  // Dynamically map strengths and risks from SHAP drivers
+  // Map positive drivers from SHAP contributions
   const strengths = (score.key_drivers ?? [])
-    .filter(d => d.type === 'Positive Driver' && d.impact > 0)
+    .filter(d => d && d.type === 'Positive Driver' && (d.impact ?? 0) > 0)
     .slice(0, 3)
-    .map(d => ({
-      label: d.feature.replace(/_/g, ' '),
-      detail: `Contributes positive value of +${d.impact.toFixed(1)} to score`,
-      source: d.feature.startsWith('gst') ? 'gst' : d.feature.startsWith('upi') ? 'upi' : d.feature.startsWith('aa') ? 'aa' : 'epfo',
-      lift: `+${Math.round(d.impact)}`
-    }));
+    .map(d => {
+      const featName = d.feature ? String(d.feature) : 'metric';
+      const imp = d.impact ?? 0;
+      return {
+        label: featName.replace(/_/g, ' '),
+        detail: `Contributes positive value of +${imp.toFixed(1)} to score`,
+        source: featName.startsWith('gst') ? 'gst' : featName.startsWith('upi') ? 'upi' : featName.startsWith('aa') ? 'aa' : 'epfo',
+        lift: `+${Math.round(imp)}`
+      };
+    });
 
+  // Map negative drivers from SHAP contributions
   const risks = (score.key_drivers ?? [])
-    .filter(d => d.type === 'Negative Driver' || d.impact < 0)
+    .filter(d => d && (d.type === 'Negative Driver' || (d.impact ?? 0) < 0))
     .slice(0, 3)
-    .map(d => ({
-      label: d.feature.replace(/_/g, ' '),
-      detail: `Reduces score by ${d.impact.toFixed(1)} points`,
-      source: d.feature.startsWith('gst') ? 'gst' : d.feature.startsWith('upi') ? 'upi' : d.feature.startsWith('aa') ? 'aa' : 'epfo',
-      drag: `${Math.round(d.impact)}`
-    }));
-
+    .map(d => {
+      const featName = d.feature ? String(d.feature) : 'metric';
+      const imp = d.impact ?? 0;
+      return {
+        label: featName.replace(/_/g, ' '),
+        detail: `Reduces score calculation by ${Math.abs(imp).toFixed(1)} points`,
+        source: featName.startsWith('gst') ? 'gst' : featName.startsWith('upi') ? 'upi' : featName.startsWith('aa') ? 'aa' : 'epfo',
+        drag: `${Math.round(imp)}`
+      };
+    });
 
   return (
-    <div className="min-h-screen pt-20 pb-12">
-      <div className="max-w-5xl mx-auto px-6">
-        <SectionHeader
-          title="Your Business Health Score"
-          subtitle={`${record.enterprise_id} · Sector: ${record.sector || 'Unknown'} · Segment: ${record.segment || 'Unknown'} — This score summarises your financial health across 4 data sources. It is what a credit officer sees when evaluating your application.`}
-        />
-
-        {/* Main score + sub-scores */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Score hero */}
-          <GlassCard className="p-8 flex flex-col items-center text-center gap-4" glow="emerald">
-            <AnimatedScore score={score.overall_score ?? 0} />
-            <div className="space-y-2">
-              <ScoreTierBadge tier={score.risk_tier} size="md" />
-              <p className="text-sm text-slate-400">
-                Data Confidence: <span className="text-white font-semibold">{score.data_confidence}</span>
-              </p>
-              <ConfidenceBadge
-                sources={['gold','silver','bronze'].includes(score.data_confidence.toLowerCase()) ? (score.data_confidence.toLowerCase() === 'gold' ? 4 : score.data_confidence.toLowerCase() === 'silver' ? 3 : 2) : 1}
-                total={4}
-                level={score.data_confidence}
-              />
-            </div>
-            <div className="w-full pt-2 border-t border-white/5">
-              <p className="text-xs text-slate-500 leading-relaxed">
-                Score range: <span className="text-white font-medium">{score.score_range_low?.toFixed(0)}–{score.score_range_high?.toFixed(0)}</span>
-                <InfoTooltip text="Confidence band reflects data completeness. Gold confidence limits score variance to ±5 points." />
-              </p>
-            </div>
-          </GlassCard>
-
-          {/* Radar chart */}
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-white">Score Breakdown by Source</p>
-              <InfoTooltip text="Each axis shows how well you performed on that data pillar (0–100). The shaded area shows your footprint." />
-            </div>
-            <p className="text-xs text-slate-500 mb-3">Hover any data point to see the raw sub-score</p>
-            <SubScoreRadar scores={radarScores} size={230} />
-          </GlassCard>
+    <div className="min-h-screen pt-20 pb-16 bg-[#FAF8F3] text-[#1E293B] px-6 select-text animate-fade-in">
+      <div className="max-w-5xl mx-auto">
+        
+        {/* Document Header */}
+        <div className="border border-[#E2DBD0] bg-white p-6 mb-8 text-[#0C182A]">
+          <span className="text-xxs font-data-mono font-bold tracking-widest text-[#8B704F] block">
+            OFFICIAL RECORD · BORROWER PORTAL
+          </span>
+          <h1 className="font-serif-editorial text-3xl font-bold tracking-tight mt-1">
+            MSME Business Health Profile
+          </h1>
+          <p className="text-xs text-[#556B82] mt-1 font-data-mono leading-relaxed">
+            FILE REF: SAHAY-CR-${(record?.enterprise_id ?? 'Unknown').substring(Math.min(4, (record?.enterprise_id ?? 'Unknown').length))} · Segment: {record.segment || 'Unknown'} · Sector: {record.sector || 'Unknown'}
+          </p>
+          <div className="mt-4 pt-4 border-t border-[#E2DBD0] text-xs text-[#556B82] leading-relaxed max-w-3xl">
+            This dashboard presents the alt-data credit score calculated across 4 digital transaction pillars.
+            This representation mirrors the data matrix evaluated by institutional underwriters.
+          </div>
         </div>
 
-        {/* Sub-score detail cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        {/* Sub-Navigation Action Bar */}
+        <div className="flex flex-wrap gap-3 mb-8 border-b border-[#E9E6DF] pb-4 font-data-mono text-xs animate-fade-in">
+          <Link 
+            to="/consent" 
+            className="px-3 py-1.5 border bg-white border-[#E9E6DF] text-[#64748B] hover:text-[#0E6E4E] hover:bg-[#ECFDF5] transition-all cursor-pointer"
+            style={{ borderRadius: '8px' }}
+          >
+            🔌 Manage Data Connect
+          </Link>
+          <Link 
+            to="/drilldown" 
+            className="px-3 py-1.5 border bg-white border-[#E9E6DF] text-[#64748B] hover:text-[#0E6E4E] hover:bg-[#ECFDF5] transition-all cursor-pointer"
+            style={{ borderRadius: '8px' }}
+          >
+            📊 Alt-Data Drill-Down
+          </Link>
+          <Link 
+            to="/simulator" 
+            className="px-3 py-1.5 border bg-white border-[#E9E6DF] text-[#64748B] hover:text-[#0E6E4E] hover:bg-[#ECFDF5] transition-all cursor-pointer"
+            style={{ borderRadius: '8px' }}
+          >
+            ⚙️ What-If Weight Simulator
+          </Link>
+          <Link 
+            to="/live" 
+            className="px-3 py-1.5 border bg-white border-[#E9E6DF] text-[#64748B] hover:text-[#0E6E4E] hover:bg-[#ECFDF5] transition-all cursor-pointer"
+            style={{ borderRadius: '8px' }}
+          >
+            ⚡ Live ML API Connection
+          </Link>
+        </div>
+
+        {/* Top Split: Score Hero + Radar Footprint */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          
+          {/* Fused Score Hub */}
+          <div className="border border-[#E2DBD0] bg-white p-8 flex flex-col items-center justify-between text-center gap-6">
+            <div>
+              <span className="text-xxs font-data-mono font-bold tracking-widest text-[#556B82] block uppercase mb-4">
+                FUSED FUSION SCORE
+              </span>
+              <AnimatedScore score={score.overall_score ?? 0} />
+            </div>
+
+            <div className="space-y-3 w-full">
+              <span className={`inline-flex items-center gap-1 rounded-none px-3 py-1 font-bold text-xs font-data-mono border ${
+                (score?.overall_score ?? 0) >= 75 ? 'text-[#234E45] bg-[#E6ECE9] border-[#C4D3CD]' : 'text-[#7B5500] bg-[#FAF3E0] border-[#ECDDB0]'
+              }`}>
+                Tier {score.risk_tier} · {(score?.overall_score ?? 0) >= 75 ? 'STRONG' : 'MODERATE RISK'}
+              </span>
+              
+              <div className="flex flex-col items-center gap-1.5 font-data-mono text-xs">
+                <span className="text-[#556B82]">Confidence calibration:</span>
+                <span className="font-bold text-[#0C182A]">{score.data_confidence.toUpperCase()} ASSURED</span>
+              </div>
+            </div>
+
+            <div className="w-full pt-4 border-t border-[#E2DBD0] font-data-mono text-[11px] text-[#556B82]">
+              Score Range baseline: <span className="font-bold text-[#0C182A]">{score.score_range_low} – {score.score_range_high}</span>
+            </div>
+          </div>
+
+          {/* Radar Chart Footprint */}
+          <div className="border border-[#E2DBD0] bg-white p-6 flex flex-col justify-between">
+            <div>
+              <h3 className="text-xs font-data-mono font-bold tracking-widest text-[#556B82] uppercase mb-1">
+                RADAR CO-EFFICIENT FOOTPRINT
+              </h3>
+              <p className="text-[11px] text-[#556B82]">Visualizing borrower metrics across each independent scoring parameter</p>
+            </div>
+            <div className="py-2">
+              <SubScoreRadar scores={radarScores} size={220} />
+            </div>
+            <p className="text-[10px] text-center font-data-mono text-[#556B82]">
+              * Perimeter represents standard baseline calibration.
+            </p>
+          </div>
+
+        </div>
+
+        {/* 4 Pillars Ledger Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {(Object.entries(SOURCE_META) as [string, any][]).map(([key, meta]) => {
             const subScore = score[`${key}_score` as keyof typeof score] as number | null;
+            const scoreColor = subScore ? (subScore >= 75 ? '#234E45' : subScore >= 60 ? '#7B5500' : '#8A332E') : '#556B82';
+            
             return (
-              <GlassCard key={key} className="p-4 cursor-pointer" hover onClick={() => nav(`/drilldown?tab=${key}`)}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg">{meta.icon}</span>
-                  <span className="text-xxs font-bold text-slate-500 uppercase tracking-wide">Wt: {meta.weight}</span>
+              <div 
+                key={key} 
+                className="border border-[#E2DBD0] bg-white p-4 cursor-pointer hover:bg-[#FAF6F0] transition-colors"
+                onClick={() => nav(`/drilldown?tab=${key}`)}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-base">{meta.icon}</span>
+                  <span className="text-xxs font-data-mono font-bold text-[#556B82] uppercase tracking-wide">Wt: {meta.weight}</span>
                 </div>
-                <div className="text-2xl font-black mb-1" style={{ color: subScore ? (subScore >= 75 ? '#10B981' : subScore >= 60 ? '#60A5FA' : '#FBBF24') : '#64748B' }}>
+                
+                <div className="text-3xl font-bold font-serif-editorial mb-1" style={{ color: scoreColor }}>
                   {subScore ?? '—'}
                 </div>
-                <div className="text-xs font-semibold text-slate-300 mb-2">{meta.label}</div>
-                <ProgressBar value={subScore ?? 0} color={meta.color} />
-                <p className="text-xxs text-slate-500 mt-2">Tap to view detail →</p>
-              </GlassCard>
+                
+                <div className="text-xs font-bold text-[#0C182A] mb-3">{meta.label}</div>
+                
+                {/* Rule-style flat progress tracker */}
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${subScore ?? 0}%`, background: scoreColor }} />
+                </div>
+                
+                <p className="text-[10px] font-data-mono text-[#556B82] mt-3">Drill-Down Record →</p>
+              </div>
             );
           })}
         </div>
 
-        {/* Strengths & Risks */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <GlassCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-              <TrendingUp size={15} className="text-emerald-400" /> What's Working For You
+        {/* Forensic Drivers: Strengths vs Risks */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+          
+          {/* Strengths */}
+          <div className="border border-[#E2DBD0] bg-white p-6">
+            <h3 className="text-xs font-data-mono font-bold tracking-widest text-[#234E45] uppercase mb-4 flex items-center gap-2">
+              ■ CREDIT COMPLIANCE STRENGTHS
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {strengths.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No significant positive drivers calculated.</p>
+                <p className="text-xs text-[#556B82] italic">No significant positive drivers calculated.</p>
               ) : (
                 strengths.map((s, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 + i * 0.1 }}
-                    className="flex items-start gap-3"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <TrendingUp size={10} className="text-emerald-400" />
+                  <div key={i} className="border-l-2 border-[#234E45] pl-4 py-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#0C182A] capitalize font-sans-ui">{s.label}</span>
+                      <span className="font-data-mono text-[10px] text-[#234E45] bg-[#E6ECE9] border border-[#C4D3CD] px-1.5 py-0.2">
+                        {s.lift} IMPACT
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white capitalize">{s.label}</span>
-                        <SourceBadge source={s.source as any} size="sm" showLabel={false} />
-                        <span className="text-emerald-400 text-xs font-bold">{s.lift}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{s.detail}</p>
-                    </div>
-                  </motion.div>
+                    <p className="text-xs text-[#556B82] mt-1 leading-relaxed">{s.detail}</p>
+                  </div>
                 ))
               )}
             </div>
-          </GlassCard>
+          </div>
 
-          <GlassCard className="p-6">
-            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-              <TrendingDown size={15} className="text-amber-400" /> What's Weighing Your Score Down
+          {/* Risks */}
+          <div className="border border-[#E2DBD0] bg-white p-6">
+            <h3 className="text-xs font-data-mono font-bold tracking-widest text-[#8A332E] uppercase mb-4 flex items-center gap-2">
+              ■ OUTSTANDING RISK ANNOTATIONS
             </h3>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {risks.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No significant negative drivers calculated.</p>
+                <p className="text-xs text-[#556B82] italic">No risk adjustments calculated.</p>
               ) : (
                 risks.map((r, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.2 + i * 0.1 }}
-                    className="flex items-start gap-3"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <TrendingDown size={10} className="text-amber-400" />
+                  <div key={i} className="border-l-2 border-[#8A332E] pl-4 py-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#0C182A] capitalize font-sans-ui">{r.label}</span>
+                      <span className="font-data-mono text-[10px] text-[#8A332E] bg-[#F5ECEB] border border-[#ECCDCB] px-1.5 py-0.2">
+                        {r.drag} IMPACT
+                      </span>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-white capitalize">{r.label}</span>
-                        <SourceBadge source={r.source as any} size="sm" showLabel={false} />
-                        <span className="text-red-400 text-xs font-bold">{r.drag}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">{r.detail}</p>
-                    </div>
-                  </motion.div>
+                    <p className="text-xs text-[#556B82] mt-1 leading-relaxed">{r.detail}</p>
+                  </div>
                 ))
               )}
             </div>
-          </GlassCard>
+          </div>
+
         </div>
 
-        {/* What would improve my score — collapsible */}
-        <GlassCard className="mb-6">
+        {/* Actionable Calibrations */}
+        <div className="border border-[#E2DBD0] bg-white mb-8">
           <button
-            className="w-full p-5 flex items-center justify-between text-left"
+            className="w-full p-6 flex items-center justify-between text-left focus:outline-none focus:bg-[#FAF6F0]"
             onClick={() => setShowImprovements(v => !v)}
           >
             <div>
-              <h3 className="text-sm font-bold text-white">What Would Improve My Score?</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Ranked actions with estimated score impact</p>
+              <h3 className="text-xs font-data-mono font-bold tracking-widest text-[#0C182A] uppercase">
+                RECOMMENDED ACTION PLAN FOR SCORE OPTIMIZATION
+              </h3>
+              <p className="text-[11px] text-[#556B82] mt-0.5">Underwriter-calibrated recommendations with estimated impact score lifts</p>
             </div>
-            {showImprovements ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+            {showImprovements ? <ChevronUp size={16} className="text-[#556B82]" /> : <ChevronDown size={16} className="text-[#556B82]" />}
           </button>
+          
           {showImprovements && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              className="px-5 pb-5"
-            >
-              <div className="space-y-3">
+            <div className="px-6 pb-6 pt-2 border-t border-[#FAF6F0]">
+              <div className="space-y-4">
                 {(score.recommendations ?? []).length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">No recommendations calculated.</p>
+                  <p className="text-xs text-[#556B82] italic">No active optimization steps calibrated.</p>
                 ) : (
                   (score.recommendations ?? []).map((item, i) => (
-                    <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                      <div className="text-lg font-black text-emerald-400 w-12 text-center flex-shrink-0">+{item.estimated_lift.toFixed(0)}</div>
+                    <div key={i} className="flex items-start gap-4 p-4 border border-[#E2DBD0] bg-[#FAF6F0]">
+                      <div className="text-2xl font-bold font-serif-editorial text-[#234E45] w-12 text-center flex-shrink-0 pt-0.5">
+                        +{item.estimated_lift}
+                      </div>
                       <div className="flex-1">
-                        <p className="text-sm text-white font-medium">{item.title}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">{item.recommendation}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <SourceBadge source={item.pillar as any} size="sm" />
+                        <p className="text-xs font-bold text-[#0C182A]">{item.title}</p>
+                        <p className="text-xs text-[#556B82] mt-1 leading-relaxed">{item.recommendation}</p>
+                        <div className="mt-2.5">
+                          <span className="font-data-mono text-[9px] text-[#8B704F] border border-[#E2DBD0] px-1.5 py-0.5 uppercase">
+                            TARGET PILLAR: {item.pillar.toUpperCase()}
+                          </span>
                         </div>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
-        </GlassCard>
+        </div>
 
-        {/* CTA row */}
-        <div className="flex gap-3">
-          <button className="btn-ghost" onClick={() => nav('/drilldown')}>
-            <ArrowRight size={14} /> View Detailed Data
+        {/* CTA Buttons */}
+        <div className="flex gap-4 flex-wrap border-t border-[#E2DBD0] pt-6">
+          <button
+            onClick={() => nav('/drilldown')}
+            className="px-4 py-2 border border-[#0C182A] text-[#0C182A] bg-transparent hover:bg-[#FAF6F0] font-data-mono text-xs font-semibold uppercase tracking-wider transition-all duration-200 cursor-pointer"
+          >
+            Open Alternative Data Drill-Down →
           </button>
-          <button className="btn-primary" onClick={() => nav('/simulator')}>
-            Try What-If Simulator <ArrowRight size={14} />
+          
+          <button
+            onClick={() => nav('/simulator')}
+            className="px-4 py-2 bg-[#0C182A] text-[#FAF8F5] hover:bg-[#1B2D4A] font-data-mono text-xs font-semibold uppercase tracking-wider transition-all duration-200 cursor-pointer"
+          >
+            Try What-If Simulator
           </button>
         </div>
+
       </div>
     </div>
   );
