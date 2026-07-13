@@ -22,6 +22,7 @@
 
 /* ─── Global Reset (Direction B: Series-B Fintech) ───────────────────────────── */
 html, body {
+  font-size: 18px;
   background-color: #FAF8F3 !important;
   color: #1E293B !important;
   font-family: 'Inter', system-ui, sans-serif;
