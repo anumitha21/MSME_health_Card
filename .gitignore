@@ -18,7 +18,7 @@ env/
 Thumbs.db
 
 # Models
-models_v3/
+backend/models_v3/
 
 # Logs
 *.log
