@@ -14,7 +14,7 @@ jobs:
         run: |
           URL="${{ secrets.RENDER_BACKEND_URL }}"
           if [ -z "$URL" ]; then
-            URL="https://msme-health-card-api.onrender.com"
+            URL="https://msme-health-card-a1p3.onrender.com/"
           fi
           echo "Pinging backend at $URL/health..."
           curl -s -o /dev/null -w "HTTP status: %{http_code}\n" "$URL/health"
