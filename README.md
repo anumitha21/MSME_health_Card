@@ -1,4 +1,4 @@
-# IDBI MSME Sahay — AI-Powered Credit Underwriting & Alternative Credit Gateway
+# CreditPulse AI — AI-Powered Credit Underwriting & Alternative Credit Gateway
 
 **IDBI MSME Sahay** is a production-grade alternative credit underwriting console and borrower coaching gateway developed for the **IDBI Innovate 2026 Hackathon**. The platform evaluates capital risk migration, Priority Sector Lending (PSL) eligibility, and alternative credit profiles by fusing transactional data streams—GST, UPI, Account Aggregator (AA), and EPFO—into a single, explainable credit health metric.
 
