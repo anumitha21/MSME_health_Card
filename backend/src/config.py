@@ -251,8 +251,17 @@ def assign_confidence_tier(available_pillars: list) -> str:
 # Helper Functions
 # -----------------------------------------------------------------------------
 
+def get_artifact_path(filename: str) -> Path:
+    p = MODEL_DIR / filename
+    if not p.exists():
+        backup_p = ROOT_DIR / "models_v3_frozen_backup" / filename
+        if backup_p.exists():
+            return backup_p
+    return p
+
+
 def model_path(group: str):
-    return MODEL_DIR / f"{group}_model.pkl"
+    return get_artifact_path(f"{group}_model.pkl")
 
 
 def save_feature_groups():
@@ -266,12 +275,12 @@ def save_fusion_weights():
 
 
 def load_feature_groups():
-    with open(MODEL_DIR / "feature_groups.json") as f:
+    with open(get_artifact_path("feature_groups.json")) as f:
         return json.load(f)
 
 
 def load_fusion_weights():
-    with open(MODEL_DIR / "fusion_weights.json") as f:
+    with open(get_artifact_path("fusion_weights.json")) as f:
         return json.load(f)
 
 

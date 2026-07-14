@@ -13,11 +13,11 @@ import pandas as pd
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 
-from src.config import DATASET_PATH, MODEL_DIR
+from src.config import DATASET_PATH, MODEL_DIR, get_artifact_path
 
-AUTOENCODER_PATH = MODEL_DIR / "autoencoder.pkl"
-SCALER_PATH = MODEL_DIR / "imputation_scaler.pkl"
-MEDIANS_PATH = MODEL_DIR / "imputation_medians.json"
+AUTOENCODER_PATH = get_artifact_path("autoencoder.pkl")
+SCALER_PATH = get_artifact_path("imputation_scaler.pkl")
+MEDIANS_PATH = get_artifact_path("imputation_medians.json")
 
 IMPUTATION_FEATURES = [
     "gst_filing_consistency_pct",

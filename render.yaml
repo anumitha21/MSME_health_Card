@@ -1,0 +1,13 @@
+services:
+  # 1. FastAPI Backend Web Service
+  - type: web
+    name: msme-health-card-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # User will input this API key in the Render UI during setup
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash

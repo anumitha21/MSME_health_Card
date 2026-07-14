@@ -18,7 +18,13 @@ env/
 Thumbs.db
 
 # Models
-backend/models_v3/
+models_v3/
+*.pkl
+
+# Frontend / Node
+node_modules/
+dist/
+msme-prototype/
 
 # Logs
 *.log

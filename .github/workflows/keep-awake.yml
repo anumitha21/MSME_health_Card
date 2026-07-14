@@ -1,0 +1,20 @@
+name: Keep Render Backend Awake
+
+on:
+  schedule:
+    # Runs every 14 minutes (Render spins down free services after 15 minutes of inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Service
+        run: |
+          URL="${{ secrets.RENDER_BACKEND_URL }}"
+          if [ -z "$URL" ]; then
+            URL="https://msme-health-card-api.onrender.com"
+          fi
+          echo "Pinging backend at $URL/health..."
+          curl -s -o /dev/null -w "HTTP status: %{http_code}\n" "$URL/health"

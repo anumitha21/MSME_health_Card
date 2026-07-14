@@ -1,6 +1,6 @@
 // ─── API Service — connects prototype to FastAPI backend at localhost:8000 ────
 
-const BASE = 'http://127.0.0.1:8000';
+export const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 // ─── Types matching backend ScoreResponse ─────────────────────────────────────
 export interface DriverItem {

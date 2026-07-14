@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
-  fetchScoreById, fetchTrend, fetchEnterpriseRecord, checkHealth,
+  fetchScoreById, fetchTrend, fetchEnterpriseRecord, checkHealth, BASE,
   type ScoreResponse, type TrendResponse, type BusinessRecord
 } from '../data/api';
 
@@ -229,7 +229,7 @@ export function CreditDataProvider({ children }: { children: React.ReactNode }) 
       fusion_weights: customWeights
     };
 
-    const res = await fetch('http://127.0.0.1:8000/score/custom', {
+    const res = await fetch(`${BASE}/score/custom`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
